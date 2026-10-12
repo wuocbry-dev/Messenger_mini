@@ -47,7 +47,87 @@ public class User {
     protected User() {
     }
 
+    private User(
+            String username,
+            String email,
+            String passwordHash,
+            String displayName,
+            String status,
+            LocalDateTime createdAt,
+            LocalDateTime updatedAt
+    ) {
+        this.username = username;
+        this.email = email;
+        this.passwordHash = passwordHash;
+        this.displayName = displayName;
+        this.status = status;
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
+    }
+
+    public static User register(
+            String username,
+            String email,
+            String passwordHash,
+            String displayName,
+            LocalDateTime now
+    ) {
+        return new User(username, email, passwordHash, displayName, "ACTIVE", now, now);
+    }
+
     public Long getId() {
         return id;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public String getPasswordHash() {
+        return passwordHash;
+    }
+
+    public String getDisplayName() {
+        return displayName;
+    }
+
+    public String getAvatarObjectKey() {
+        return avatarObjectKey;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public LocalDateTime getLastSeenAt() {
+        return lastSeenAt;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public boolean isActive() {
+        return "ACTIVE".equals(status);
+    }
+
+    public void updateLastSeen(LocalDateTime lastSeenAt) {
+        this.lastSeenAt = lastSeenAt;
+    }
+
+    public void updateProfile(String displayName, String avatarObjectKey, LocalDateTime now) {
+        if (displayName != null && !displayName.isBlank()) {
+            this.displayName = displayName;
+        }
+        this.avatarObjectKey = avatarObjectKey;
+        this.updatedAt = now;
     }
 }
