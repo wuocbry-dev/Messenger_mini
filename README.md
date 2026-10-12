@@ -92,11 +92,11 @@ Start local MySQL:
 docker compose up -d mysql
 ```
 
-Start backend:
+Start backend with the Maven Wrapper:
 
-```bash
+```powershell
 cd backend
-mvn spring-boot:run
+.\mvnw.cmd spring-boot:run
 ```
 
 Start frontend:
@@ -108,6 +108,8 @@ npm run dev
 ```
 
 Use `.env.example`, `backend/.env.example`, and `frontend/.env.example` as references. Do not commit real `.env` files.
+
+For the backend local environment workflow, see `docs/LOCAL_RUNTIME.md`.
 
 ## Codex Workflow
 

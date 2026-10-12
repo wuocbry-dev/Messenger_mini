@@ -9,3 +9,5 @@
 - Keep `spring.jpa.hibernate.ddl-auto=validate`.
 - Add Flyway migrations under `src/main/resources/db/migration/` for schema changes.
 - Keep R2 and Agora secrets backend-only.
+- Use the Maven Wrapper (`mvnw.cmd` on Windows) for local backend verification.
+- Keep `backend/.env` local and ignored; do not commit real secrets.
