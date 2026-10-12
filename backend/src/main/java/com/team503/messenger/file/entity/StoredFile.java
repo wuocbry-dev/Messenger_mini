@@ -44,7 +44,75 @@ public class StoredFile {
     protected StoredFile() {
     }
 
+    private StoredFile(
+            Long uploaderId,
+            String objectKey,
+            String originalName,
+            String mimeType,
+            Long sizeBytes,
+            String checksumSha256,
+            String etag,
+            LocalDateTime createdAt
+    ) {
+        this.uploaderId = uploaderId;
+        this.objectKey = objectKey;
+        this.originalName = originalName;
+        this.mimeType = mimeType;
+        this.sizeBytes = sizeBytes;
+        this.checksumSha256 = checksumSha256;
+        this.etag = etag;
+        this.createdAt = createdAt;
+    }
+
+    public static StoredFile create(
+            Long uploaderId,
+            String objectKey,
+            String originalName,
+            String mimeType,
+            Long sizeBytes,
+            String checksumSha256,
+            String etag,
+            LocalDateTime createdAt
+    ) {
+        return new StoredFile(
+                uploaderId, objectKey, originalName, mimeType, sizeBytes,
+                checksumSha256, etag, createdAt
+        );
+    }
+
     public Long getId() {
         return id;
+    }
+
+    public Long getUploaderId() {
+        return uploaderId;
+    }
+
+    public String getObjectKey() {
+        return objectKey;
+    }
+
+    public String getOriginalName() {
+        return originalName;
+    }
+
+    public String getMimeType() {
+        return mimeType;
+    }
+
+    public Long getSizeBytes() {
+        return sizeBytes;
+    }
+
+    public String getChecksumSha256() {
+        return checksumSha256;
+    }
+
+    public String getEtag() {
+        return etag;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
     }
 }
