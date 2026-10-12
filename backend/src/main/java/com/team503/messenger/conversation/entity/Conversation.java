@@ -7,6 +7,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "conversations")
@@ -41,7 +43,92 @@ public class Conversation {
     protected Conversation() {
     }
 
+    private Conversation(
+            String type,
+            String directKey,
+            String title,
+            String avatarObjectKey,
+            Long createdBy,
+            LocalDateTime createdAt,
+            LocalDateTime updatedAt
+    ) {
+        this.type = type;
+        this.directKey = directKey;
+        this.title = title;
+        this.avatarObjectKey = avatarObjectKey;
+        this.createdBy = createdBy;
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
+    }
+
+    public static Conversation createDirect(
+            Long userId1,
+            Long userId2,
+            Long createdBy,
+            String directKey,
+            LocalDateTime now
+    ) {
+        return new Conversation(
+                "DIRECT",
+                directKey,
+                null,
+                null,
+                createdBy,
+                now,
+                now
+        );
+    }
+
+    public static String generateDirectKey(Long userId1, Long userId2) {
+        long minId = Math.min(userId1, userId2);
+        long maxId = Math.max(userId1, userId2);
+        String pair = minId + ":" + maxId;
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(pair.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(hash.length * 2);
+            for (byte b : hash) {
+                hex.append(String.format("%02x", b));
+            }
+            return hex.toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is not available", e);
+        }
+    }
+
     public Long getId() {
         return id;
+    }
+
+    public String getType() {
+        return type;
+    }
+
+    public String getDirectKey() {
+        return directKey;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public String getAvatarObjectKey() {
+        return avatarObjectKey;
+    }
+
+    public Long getCreatedBy() {
+        return createdBy;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void touch(LocalDateTime now) {
+        this.updatedAt = now;
     }
 }

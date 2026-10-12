@@ -25,7 +25,45 @@ public class ConversationMember {
     protected ConversationMember() {
     }
 
+    private ConversationMember(Long conversationId, Long userId, String role, LocalDateTime joinedAt) {
+        this.id = new ConversationMemberId(conversationId, userId);
+        this.role = role;
+        this.joinedAt = joinedAt;
+    }
+
+    public static ConversationMember join(Long conversationId, Long userId, LocalDateTime joinedAt) {
+        return new ConversationMember(conversationId, userId, "MEMBER", joinedAt);
+    }
+
+    public static ConversationMember joinAsOwner(Long conversationId, Long userId, LocalDateTime joinedAt) {
+        return new ConversationMember(conversationId, userId, "OWNER", joinedAt);
+    }
+
     public ConversationMemberId getId() {
         return id;
+    }
+
+    public Long getConversationId() {
+        return id.getConversationId();
+    }
+
+    public Long getUserId() {
+        return id.getUserId();
+    }
+
+    public String getRole() {
+        return role;
+    }
+
+    public LocalDateTime getJoinedAt() {
+        return joinedAt;
+    }
+
+    public LocalDateTime getLeftAt() {
+        return leftAt;
+    }
+
+    public boolean isActive() {
+        return leftAt == null;
     }
 }
