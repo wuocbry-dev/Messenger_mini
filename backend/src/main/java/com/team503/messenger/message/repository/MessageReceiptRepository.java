@@ -16,5 +16,5 @@ public interface MessageReceiptRepository extends JpaRepository<MessageReceipt, 
     List<MessageReceipt> findByMessageId(@Param("messageId") Long messageId);
 
     @Query("SELECT mr FROM MessageReceipt mr WHERE mr.id.messageId = :messageId AND mr.id.userId = :userId")
-    MessageReceipt findByMessageIdAndUserId(@Param("messageId") Long messageId, @Param("userId") Long userId);
+    MessageReceipt fetchByMessageAndUser(@Param("messageId") Long messageId, @Param("userId") Long userId);
 }

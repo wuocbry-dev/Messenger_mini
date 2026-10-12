@@ -8,13 +8,9 @@ import com.team503.messenger.file.entity.StoredFile;
 import com.team503.messenger.file.exception.FileException;
 import com.team503.messenger.file.repository.StoredFileRepository;
 import java.net.URI;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.UUID;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,8 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class FileService {
-
-    private static final Logger log = LoggerFactory.getLogger(FileService.class);
 
     /**
      * Maximum upload size: 50 MB. The presigned upload URL is generated with
@@ -99,10 +93,14 @@ public class FileService {
 
     /**
      * Return metadata for a stored file along with a presigned GET URL.
+     * Only the uploader and active members of a conversation the file is
+     * attached to may read it; anyone else gets 404 so ids cannot be probed.
      */
     @Transactional(readOnly = true)
-    public FileResponse getFile(Long fileId) {
+    public FileResponse getFile(Long requesterId, Long fileId) {
         StoredFile file = repository.findById(fileId)
+                .filter(f -> f.getUploaderId().equals(requesterId)
+                        || repository.isAttachedInConversationOf(fileId, requesterId))
                 .orElseThrow(() -> new FileException(
                         HttpStatus.NOT_FOUND,
                         "FILE_NOT_FOUND",

@@ -61,9 +61,11 @@ POST /api/v1/auth/login
 POST /api/v1/auth/refresh
 POST /api/v1/auth/logout
 GET  /api/v1/users/me
+GET  /api/v1/users/search?q=<query>
+PATCH /api/v1/users/me/profile
 ```
 
-Register accepts `username`, `email`, `password`, and `displayName`. Login accepts `usernameOrEmail` and `password`. Refresh and logout accept `refreshToken`.
+Register accepts `username`, `email`, `password`, and `displayName`. Login accepts `usernameOrEmail` and `password`. Refresh and logout accept `refreshToken`. User search returns lightweight results (id, username, displayName, avatarObjectKey) without email or status.
 
 Access tokens are sent as:
 

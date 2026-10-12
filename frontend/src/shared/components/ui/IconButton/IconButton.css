@@ -1,0 +1,52 @@
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+
+.icon-btn-sm { width: 28px; height: 28px; }
+.icon-btn-md { width: 36px; height: 36px; }
+.icon-btn-lg { width: 44px; height: 44px; }
+
+.icon-btn svg { width: 16px; height: 16px; }
+.icon-btn-md svg { width: 18px; height: 18px; }
+.icon-btn-lg svg { width: 22px; height: 22px; }
+
+.icon-btn-default {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  color: var(--color-text-secondary);
+}
+.icon-btn-default:hover:not(:disabled) {
+  background: var(--color-surface-alt);
+  color: var(--color-text-primary);
+}
+
+.icon-btn-ghost {
+  background: transparent;
+  border-color: transparent;
+}
+.icon-btn-ghost:hover:not(:disabled) {
+  background: var(--color-primary-alpha);
+  color: var(--color-primary);
+}
+
+.icon-btn-danger {
+  background: transparent;
+  border-color: transparent;
+}
+.icon-btn-danger:hover:not(:disabled) {
+  background: var(--color-danger-light);
+  color: var(--color-danger);
+}
+
+.icon-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

@@ -2,8 +2,6 @@ package com.team503.messenger.message.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -30,7 +28,6 @@ public class MessageAttachment {
     private Long fileId;
 
     @Column(name = "attachment_type", nullable = false, length = 20)
-    @Enumerated(EnumType.STRING)
     private String attachmentType;
 
     protected MessageAttachment() {

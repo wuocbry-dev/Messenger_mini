@@ -53,9 +53,20 @@ public class StompSessionPresenceListener {
             return null;
         }
         SimpMessageHeaderAccessor accessor = SimpMessageHeaderAccessor.wrap(message);
+        AuthenticatedUser fromUser = extractFromPrincipal(accessor.getUser());
+        if (fromUser != null) {
+            return fromUser;
+        }
         Object simpUser = accessor.getHeader("simpUser");
-        if (simpUser instanceof UsernamePasswordAuthenticationToken auth
+        return extractFromPrincipal(simpUser);
+    }
+
+    private static AuthenticatedUser extractFromPrincipal(Object principal) {
+        if (principal instanceof UsernamePasswordAuthenticationToken auth
                 && auth.getPrincipal() instanceof AuthenticatedUser user) {
+            return user;
+        }
+        if (principal instanceof AuthenticatedUser user) {
             return user;
         }
         return null;

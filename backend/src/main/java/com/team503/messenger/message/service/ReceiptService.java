@@ -65,7 +65,7 @@ public class ReceiptService {
             );
         }
 
-        MessageReceipt receipt = receiptRepository.findByMessageIdAndUserId(messageId, recipientId);
+        MessageReceipt receipt = receiptRepository.fetchByMessageAndUser(messageId, recipientId);
         LocalDateTime now = LocalDateTime.now(clock);
 
         if (receipt == null) {
@@ -105,7 +105,7 @@ public class ReceiptService {
             );
         }
 
-        MessageReceipt receipt = receiptRepository.findByMessageIdAndUserId(messageId, recipientId);
+        MessageReceipt receipt = receiptRepository.fetchByMessageAndUser(messageId, recipientId);
         LocalDateTime now = LocalDateTime.now(clock);
 
         if (receipt == null) {

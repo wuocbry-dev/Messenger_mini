@@ -59,6 +59,8 @@ class StompAuthInterceptorTest {
         assertThat(principal.id()).isEqualTo(1L);
         assertThat(principal.username()).isEqualTo("bob");
         assertThat(authentication).isInstanceOf(UsernamePasswordAuthenticationToken.class);
+        // convertAndSendToUser(username, ...) routes by this name.
+        assertThat(authentication.getName()).isEqualTo("bob");
     }
 
     @Test

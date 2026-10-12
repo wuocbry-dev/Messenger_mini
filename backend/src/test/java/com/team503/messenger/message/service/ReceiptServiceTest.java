@@ -48,7 +48,7 @@ class ReceiptServiceTest {
         // recipient=2L, sender=1L → markDelivered(2L, ...) is allowed
         when(messageRepository.findById(10L)).thenReturn(Optional.of(message(10L, 1L, 1L)));
         when(memberRepository.existsActiveMember(1L, 2L)).thenReturn(true);
-        when(receiptRepository.findByMessageIdAndUserId(10L, 2L)).thenReturn(null);
+        when(receiptRepository.fetchByMessageAndUser(10L, 2L)).thenReturn(null);
         when(receiptRepository.save(any(MessageReceipt.class))).thenAnswer(inv -> inv.getArgument(0));
 
         MessageReceipt receipt = receiptService.markDelivered(2L, 10L);
@@ -62,7 +62,7 @@ class ReceiptServiceTest {
         when(messageRepository.findById(10L)).thenReturn(Optional.of(message(10L, 1L, 1L)));
         when(memberRepository.existsActiveMember(1L, 2L)).thenReturn(true);
         MessageReceipt existing = MessageReceipt.forMessage(10L, 2L, NOW.minusMinutes(1));
-        when(receiptRepository.findByMessageIdAndUserId(10L, 2L)).thenReturn(existing);
+        when(receiptRepository.fetchByMessageAndUser(10L, 2L)).thenReturn(existing);
 
         MessageReceipt receipt = receiptService.markDelivered(2L, 10L);
 
@@ -73,7 +73,7 @@ class ReceiptServiceTest {
     void markReadAlsoMarksDelivered() {
         when(messageRepository.findById(10L)).thenReturn(Optional.of(message(10L, 1L, 1L)));
         when(memberRepository.existsActiveMember(1L, 2L)).thenReturn(true);
-        when(receiptRepository.findByMessageIdAndUserId(10L, 2L)).thenReturn(null);
+        when(receiptRepository.fetchByMessageAndUser(10L, 2L)).thenReturn(null);
         when(receiptRepository.save(any(MessageReceipt.class))).thenAnswer(inv -> inv.getArgument(0));
 
         MessageReceipt receipt = receiptService.markRead(2L, 10L);
@@ -87,7 +87,7 @@ class ReceiptServiceTest {
         when(messageRepository.findById(10L)).thenReturn(Optional.of(message(10L, 1L, 1L)));
         when(memberRepository.existsActiveMember(1L, 2L)).thenReturn(true);
         MessageReceipt existing = MessageReceipt.forMessage(10L, 2L, NOW.minusMinutes(5));
-        when(receiptRepository.findByMessageIdAndUserId(10L, 2L)).thenReturn(existing);
+        when(receiptRepository.fetchByMessageAndUser(10L, 2L)).thenReturn(existing);
 
         MessageReceipt receipt = receiptService.markRead(2L, 10L);
 

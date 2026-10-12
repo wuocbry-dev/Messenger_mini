@@ -1,105 +1,80 @@
 # Messenger Mini
 
-Messenger Mini is a university project for a web-based realtime messenger. The repository is currently initialized as a durable foundation for future implementation work.
+Messenger Mini is a university project for a web-based realtime messenger with authentication, profiles, direct conversations, chat, presence, typing indicators, receipts, attachments, and 1-to-1 voice calls.
 
-## Current Status
+## Features (Implemented)
 
-Initialized:
-- Repository documentation and Codex task workflow.
-- Spring Boot backend scaffold.
-- Vite React TypeScript frontend scaffold.
-- MySQL/Flyway configuration boundaries.
-- WebSocket/STOMP, Cloudflare R2, Agora, and OpenAPI documentation boundaries.
-
-Planned, not implemented yet:
-- Authentication and JWT flows.
-- User/profile APIs.
-- 1-to-1 conversations and realtime chat.
-- Presence, typing indicators, delivered/read receipts.
-- File/image upload flows using Cloudflare R2.
-- 1-to-1 voice calling using Agora RTC.
-- Call history APIs.
+- **Authentication** — Register, login, JWT access tokens, refresh tokens, logout.
+- **User profiles** — View and update display name and avatar.
+- **Direct conversations** — Create, list, and open 1-to-1 conversations.
+- **Realtime chat** — Send and receive TEXT messages via WebSocket/STOMP.
+- **Typing indicators** — Realtime typing state broadcast to conversation participants.
+- **Receipts** — Delivered and read receipt tracking and propagation.
+- **Presence** — Online/offline status tracked per WebSocket session.
+- **File upload** — Upload images and files to Cloudflare R2 with presigned URLs.
+- **Voice calls** — Start, accept, reject, and end Agora RTC voice calls.
+- **Call history** — Paginated list of past calls per user or per conversation.
 
 ## Stack
 
-- Backend: Java, Spring Boot, Maven, Spring Web, Spring Data JPA/Hibernate, Spring Security, JWT, WebSocket/STOMP, Flyway, Bean Validation, springdoc-openapi.
+- Backend: Java 17, Spring Boot 3.3.5, Maven, Spring Data JPA, Spring Security, JWT (HS256), WebSocket/STOMP, Flyway, springdoc-openapi.
 - Database: MySQL 8.x.
-- Frontend: Vite, React, TypeScript.
+- Frontend: Vite, React 18, TypeScript.
 - Object storage: Cloudflare R2.
-- Voice media: Agora RTC.
+- Voice media: Agora RTC SDK (Web SDK).
 
-## Architecture Summary
+## Architecture
 
-The project uses a client-server architecture with a modular monolith backend. Code is organized by feature first, with layered structure inside each feature when needed.
-
-Backend package root:
-
-```text
-com.team503.messenger
-```
-
-Frontend code is split between app-level wiring, feature modules, and shared utilities.
+Client-server. Modular monolith backend (`com.team503.messenger`). Feature-based package structure (auth, user, conversation, message, presence, file, call). Frontend uses `frontend/src/features/` for feature code and `frontend/src/shared/` for cross-cutting utilities.
 
 ## Repository Layout
 
 ```text
 .
-|-- AGENTS.md
-|-- README.md
-|-- .env.example
-|-- .gitignore
-|-- docker-compose.yml
-|-- messenger_mini_mysql_schema.sql
-|-- .codex/
-|-- docs/
-|-- backend/
-`-- frontend/
+|-- AGENTS.md                        # Project contract for AI agents
+|-- README.md                         # This file
+|-- .env.example                     # Root env vars
+|-- docker-compose.yml               # MySQL for local dev
+|-- .codex/tasks/                   # Feature task specs
+|-- docs/                           # Architecture & API docs
+|-- backend/                        # Spring Boot app
+|   |-- src/main/java/com/team503/messenger/
+|   |-- src/main/resources/db/migration/  # Flyway migrations
+|-- frontend/                       # Vite + React + TypeScript
+|   |-- src/app/                    # App layout & page routing
+|   |-- src/features/              # Feature modules
+|   |-- src/shared/                # UI primitives, API, hooks
+|   |-- src/types/                  # TypeScript shared types
 ```
 
-## Backend and Frontend Relationship
+## Getting Started
 
-The frontend calls REST APIs under `/api/v1/...` for resource/query operations and uses WebSocket/STOMP for realtime events. Agora RTC is used by the frontend for realtime voice media, while the backend owns call authorization, channel naming, token generation, and call state/history.
-
-## Database and Flyway
-
-MySQL is the primary relational database. Flyway owns schema evolution, and Hibernate should validate schema compatibility instead of updating the schema automatically.
-
-The existing `messenger_mini_mysql_schema.sql` file is preserved as the current approved database baseline. The same schema is also available as Flyway migration `V1__initial_schema.sql` without `CREATE DATABASE` or `USE` statements.
-
-Existing non-empty databases are baselined at Flyway version 1 so `V1` is not rerun over existing data. Empty databases run `V1` normally. Future schema changes should be added as Flyway migrations under:
-
-```text
-backend/src/main/resources/db/migration/
-```
-
-## Cloudflare R2
-
-Cloudflare R2 stores uploaded avatars, images, and files. MySQL stores metadata and object keys only. Backend configuration reads R2 credentials from environment variables.
-
-## Agora
-
-Agora RTC carries voice media. The backend must keep the Agora App Certificate private and generate temporary RTC tokens only when authorized.
-
-## API Documentation
-
-springdoc-openapi is configured for the backend. Swagger UI will be available once backend endpoints exist and the application is running.
-
-## Local Development
-
-Start local MySQL:
+### 1. Start MySQL
 
 ```bash
 docker compose up -d mysql
 ```
 
-Start backend with the Maven Wrapper:
+### 2. Configure environment
+
+Copy and configure environment files:
+
+```bash
+cp .env.example .env
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+```
+
+See `backend/.env.example` and `frontend/.env.example` for all required variables.
+
+### 3. Start backend
 
 ```powershell
 cd backend
 .\mvnw.cmd spring-boot:run
 ```
 
-Start frontend:
+### 4. Start frontend
 
 ```bash
 cd frontend
@@ -107,13 +82,47 @@ npm install
 npm run dev
 ```
 
-Use `.env.example`, `backend/.env.example`, and `frontend/.env.example` as references. Do not commit real `.env` files.
+Frontend runs at `http://localhost:5173`. Backend API at `http://localhost:8080`.
 
-For the backend local environment workflow, see `docs/LOCAL_RUNTIME.md`.
+### 5. Access API docs
+
+Swagger UI: `http://localhost:8080/swagger-ui/index.html`
+
+## Key Design Notes
+
+### Security
+
+- JWT access tokens (HS256, short-lived) + refresh tokens (long-lived, revocable).
+- `Authorization: Bearer <token>` on every REST request.
+- STOMP CONNECT requires a valid JWT via `StompAuthInterceptor`.
+- R2 secret keys and Agora App Certificate are backend-only.
+- File downloads require authentication — no anonymous file enumeration.
+- Typing and message sending require active conversation membership.
+
+### WebSocket Topics
+
+| Destination | Purpose |
+|---|---|
+| `/app/chat.send` | Client sends a message |
+| `/app/typing` | Client sends typing indicator |
+| `/app/receipts.mark` | Client marks message delivered/read |
+| `/user/{u}/queue/messages` | Server → client: new message |
+| `/user/{u}/queue/typing` | Server → client: typing event |
+| `/user/{u}/queue/receipts` | Server → client: receipt update |
+| `/user/{u}/queue/presence` | Server → client: presence change |
+| `/user/{u}/queue/calls` | Server → client: call state transition |
+| `/topic/conversations/{id}/typing` | Broadcast to conversation members |
+
+### Database
+
+Flyway owns all schema evolution. `backend/src/main/resources/db/migration/` holds migrations. Hibernate runs in `validate` mode.
+
+### Agora Voice Calls
+
+The backend owns authorization, call state, channel naming, and Agora token generation. The frontend Agora RTC SDK handles voice media transport directly with Agora's servers. Tokens are short-lived and never persisted.
 
 ## Codex Workflow
 
-- `AGENTS.md` is the stable project contract for future Codex sessions.
-- `.codex/ACTIVE_TASK.md` is where a temporary task can be pasted, but Codex should only execute it when explicitly told to.
-- `.codex/tasks/` stores larger future task specifications referenced by name.
-- `docs/` stores stable project context and architectural decisions.
+- `AGENTS.md` — stable project contract for AI agents.
+- `.codex/tasks/` — feature task specifications.
+- `docs/` — architecture decisions and API contracts.

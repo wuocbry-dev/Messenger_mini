@@ -1,5 +1,6 @@
 package com.team503.messenger.presence.service;
 
+import com.team503.messenger.conversation.repository.ConversationMemberRepository;
 import com.team503.messenger.presence.dto.PresenceUpdate;
 import com.team503.messenger.user.entity.User;
 import com.team503.messenger.user.repository.UserRepository;
@@ -37,6 +38,7 @@ public class PresenceService {
     static final Duration LAST_SEEN_DEBOUNCE = Duration.ofSeconds(60);
 
     private final UserRepository userRepository;
+    private final ConversationMemberRepository memberRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final Clock clock;
 
@@ -45,10 +47,12 @@ public class PresenceService {
 
     public PresenceService(
             UserRepository userRepository,
+            ConversationMemberRepository memberRepository,
             SimpMessagingTemplate messagingTemplate,
             Clock clock
     ) {
         this.userRepository = userRepository;
+        this.memberRepository = memberRepository;
         this.messagingTemplate = messagingTemplate;
         this.clock = clock;
     }
@@ -79,8 +83,10 @@ public class PresenceService {
         if (wasOfflineHolder[0]) {
             LocalDateTime now = LocalDateTime.now(clock);
             log.debug("User {} came online (session={})", userId, sessionId);
-            publish(userId, PresenceUpdate.online(userId, now));
+            publishToSelf(userId, PresenceUpdate.online(userId, now));
+            publishToPeers(userId, PresenceUpdate.online(userId, now));
         }
+        publishPeerSnapshot(userId);
     }
 
     /**
@@ -107,7 +113,9 @@ public class PresenceService {
             LocalDateTime now = LocalDateTime.now(clock);
             log.debug("User {} went offline (session={})", userId, sessionId);
             maybePersistLastSeen(userId, now);
-            publish(userId, PresenceUpdate.offline(userId, lastPersistedSeen.getOrDefault(userId, now)));
+            PresenceUpdate update = PresenceUpdate.offline(userId, lastPersistedSeen.getOrDefault(userId, now));
+            publishToSelf(userId, update);
+            publishToPeers(userId, update);
         }
     }
 
@@ -135,17 +143,34 @@ public class PresenceService {
         return Optional.of(now);
     }
 
-    private void publish(Long userId, PresenceUpdate update) {
-        // We don't have the principal name in the session table here; the
-        // presence topic is user-queue addressed, so the user must subscribe to
-        // their own queue to see their own status. The other side of presence
-        // (letting user A watch user B) is implemented as a future concern;
-        // for this task we just publish to the affected user's queue so they
-        // can confirm "I am online" across devices.
-        // We still want other devices of the same user to get a single
-        // notification, which is what /user/{username}/queue/... does.
+    private void publishToSelf(Long userId, PresenceUpdate update) {
         String username = lookupUsername(userId);
         if (username != null) {
+            messagingTemplate.convertAndSendToUser(username, "/queue/presence", update);
+        }
+    }
+
+    private void publishToPeers(Long userId, PresenceUpdate update) {
+        for (Long peerUserId : memberRepository.findActivePeerUserIds(userId)) {
+            String username = lookupUsername(peerUserId);
+            if (username != null) {
+                messagingTemplate.convertAndSendToUser(username, "/queue/presence", update);
+            }
+        }
+    }
+
+    private void publishPeerSnapshot(Long userId) {
+        String username = lookupUsername(userId);
+        if (username == null) {
+            return;
+        }
+        LocalDateTime now = LocalDateTime.now(clock);
+        for (Long peerUserId : memberRepository.findActivePeerUserIds(userId)) {
+            PresenceUpdate update = userRepository.findById(peerUserId)
+                    .map(peer -> isOnline(peerUserId)
+                            ? PresenceUpdate.online(peerUserId, now)
+                            : PresenceUpdate.offline(peerUserId, peer.getLastSeenAt()))
+                    .orElseGet(() -> PresenceUpdate.offline(peerUserId, null));
             messagingTemplate.convertAndSendToUser(username, "/queue/presence", update);
         }
     }

@@ -6,6 +6,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.team503.messenger.conversation.repository.ConversationMemberRepository;
 import com.team503.messenger.presence.dto.PresenceUpdate;
 import com.team503.messenger.user.entity.User;
 import com.team503.messenger.user.repository.UserRepository;
@@ -13,6 +14,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,18 +28,21 @@ class PresenceServiceTest {
     private static final LocalDateTime NOW = LocalDateTime.now(CLOCK);
 
     private UserRepository userRepository;
+    private ConversationMemberRepository memberRepository;
     private SimpMessagingTemplate messagingTemplate;
     private PresenceService presenceService;
 
     @BeforeEach
     void setUp() {
         userRepository = org.mockito.Mockito.mock(UserRepository.class);
+        memberRepository = org.mockito.Mockito.mock(ConversationMemberRepository.class);
         messagingTemplate = org.mockito.Mockito.mock(SimpMessagingTemplate.class);
-        presenceService = new PresenceService(userRepository, messagingTemplate, CLOCK);
+        presenceService = new PresenceService(userRepository, memberRepository, messagingTemplate, CLOCK);
 
         // Provide a username lookup for publish().
         User user = activeUser(1L, "bob");
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(memberRepository.findActivePeerUserIds(1L)).thenReturn(List.of());
     }
 
     @Test
@@ -54,6 +59,46 @@ class PresenceServiceTest {
         );
         assertThat(captor.getValue().online()).isTrue();
         assertThat(captor.getValue().userId()).isEqualTo(1L);
+    }
+
+    @Test
+    void firstSessionConnectPublishesOnlineToActivePeers() {
+        User peer = activeUser(2L, "alice");
+        when(userRepository.findById(2L)).thenReturn(Optional.of(peer));
+        when(memberRepository.findActivePeerUserIds(1L)).thenReturn(List.of(2L));
+
+        presenceService.sessionConnected(1L, "session-1");
+
+        verify(messagingTemplate).convertAndSendToUser(
+                org.mockito.ArgumentMatchers.eq("alice"),
+                org.mockito.ArgumentMatchers.eq("/queue/presence"),
+                org.mockito.ArgumentMatchers.argThat(update ->
+                        update instanceof PresenceUpdate presence
+                                && presence.userId().equals(1L)
+                                && presence.online())
+        );
+    }
+
+    @Test
+    void sessionConnectSendsPeerPresenceSnapshotToConnectingUser() {
+        User peer = activeUser(2L, "alice");
+        when(userRepository.findById(2L)).thenReturn(Optional.of(peer));
+        when(memberRepository.findActivePeerUserIds(1L)).thenReturn(List.of(2L));
+        when(memberRepository.findActivePeerUserIds(2L)).thenReturn(List.of(1L));
+
+        presenceService.sessionConnected(2L, "peer-session");
+        org.mockito.Mockito.reset(messagingTemplate);
+
+        presenceService.sessionConnected(1L, "session-1");
+
+        verify(messagingTemplate).convertAndSendToUser(
+                org.mockito.ArgumentMatchers.eq("bob"),
+                org.mockito.ArgumentMatchers.eq("/queue/presence"),
+                org.mockito.ArgumentMatchers.argThat(update ->
+                        update instanceof PresenceUpdate presence
+                                && presence.userId().equals(2L)
+                                && presence.online())
+        );
     }
 
     @Test

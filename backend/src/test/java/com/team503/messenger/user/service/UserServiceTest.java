@@ -9,12 +9,14 @@ import static org.mockito.Mockito.when;
 import com.team503.messenger.auth.exception.AuthException;
 import com.team503.messenger.user.dto.UpdateProfileRequest;
 import com.team503.messenger.user.dto.UserResponse;
+import com.team503.messenger.user.dto.UserSearchResult;
 import com.team503.messenger.user.entity.User;
 import com.team503.messenger.user.repository.UserRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -134,6 +136,47 @@ class UserServiceTest {
         assertThat(response.getClass().getRecordComponents())
                 .extracting(component -> component.getName())
                 .doesNotContain("passwordHash", "password_hash");
+    }
+
+    @Test
+    void searchUsersReturnsMatchingActiveUsers() {
+        User u1 = activeUser(1L, "quocbry", "Quoc Bry");
+        User u2 = activeUser(2L, "alice", "Alice Wonder");
+        when(userRepository.searchActiveUsers("quoc")).thenReturn(List.of(u1));
+
+        List<UserSearchResult> results = userService.searchUsers("quoc");
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).id()).isEqualTo(1L);
+        assertThat(results.get(0).username()).isEqualTo("quocbry");
+        assertThat(results.get(0).displayName()).isEqualTo("Quoc Bry");
+    }
+
+    @Test
+    void searchUsersReturnsEmptyListForBlankQuery() {
+        assertThat(userService.searchUsers("")).isEmpty();
+        assertThat(userService.searchUsers("   ")).isEmpty();
+        assertThat(userService.searchUsers(null)).isEmpty();
+        verify(userRepository, never()).searchActiveUsers(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void searchUsersReturnsEmptyListWhenNoMatch() {
+        when(userRepository.searchActiveUsers("xyz")).thenReturn(List.of());
+
+        assertThat(userService.searchUsers("xyz")).isEmpty();
+    }
+
+    @Test
+    void searchUsersExcludesSensitiveFields() {
+        User user = activeUser(1L, "testuser", "Test User");
+        when(userRepository.searchActiveUsers("test")).thenReturn(List.of(user));
+
+        List<UserSearchResult> results = userService.searchUsers("test");
+
+        assertThat(results.get(0).getClass().getRecordComponents())
+                .extracting(component -> component.getName())
+                .doesNotContain("email", "status", "passwordHash");
     }
 
     private User activeUser(Long id, String username, String displayName) {

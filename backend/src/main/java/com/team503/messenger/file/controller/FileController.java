@@ -33,7 +33,10 @@ public class FileController {
     }
 
     @GetMapping("/{fileId}/download")
-    FileResponse getFile(@PathVariable Long fileId) {
-        return fileService.getFile(fileId);
+    FileResponse getFile(
+            @AuthenticationPrincipal AuthenticatedUser currentUser,
+            @PathVariable Long fileId
+    ) {
+        return fileService.getFile(currentUser.id(), fileId);
     }
 }

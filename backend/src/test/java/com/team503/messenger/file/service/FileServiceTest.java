@@ -156,7 +156,7 @@ class FileServiceTest {
         when(storage.createDownloadUrl("messenger/u2/abc.png"))
                 .thenReturn(URI.create("https://r2.example/download"));
 
-        FileResponse response = fileService.getFile(7L);
+        FileResponse response = fileService.getFile(2L, 7L);
 
         assertThat(response.fileId()).isEqualTo(7L);
         assertThat(response.objectKey()).isEqualTo("messenger/u2/abc.png");
@@ -168,10 +168,39 @@ class FileServiceTest {
     void getFileReturnsNotFoundWhenMissing() {
         when(repository.findById(999L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> fileService.getFile(999L))
+        assertThatThrownBy(() -> fileService.getFile(2L, 999L))
                 .isInstanceOf(FileException.class)
                 .extracting(e -> ((FileException) e).getCode())
                 .isEqualTo("FILE_NOT_FOUND");
+    }
+
+    @Test
+    void getFileAllowsActiveMemberOfConversationWithAttachment() {
+        StoredFile file = StoredFile.create(2L, "messenger/u2/abc.png", "photo.png",
+                "image/png", 1024L, null, "etag-1", NOW);
+        ReflectionTestUtils.setField(file, "id", 7L);
+        when(repository.findById(7L)).thenReturn(Optional.of(file));
+        when(repository.isAttachedInConversationOf(7L, 3L)).thenReturn(true);
+        when(storage.createDownloadUrl(anyString())).thenReturn(URI.create("https://r2.example/download"));
+
+        FileResponse response = fileService.getFile(3L, 7L);
+
+        assertThat(response.fileId()).isEqualTo(7L);
+    }
+
+    @Test
+    void getFileHidesFileFromUnrelatedUser() {
+        StoredFile file = StoredFile.create(2L, "messenger/u2/abc.png", "photo.png",
+                "image/png", 1024L, null, "etag-1", NOW);
+        ReflectionTestUtils.setField(file, "id", 7L);
+        when(repository.findById(7L)).thenReturn(Optional.of(file));
+        when(repository.isAttachedInConversationOf(7L, 9L)).thenReturn(false);
+
+        assertThatThrownBy(() -> fileService.getFile(9L, 7L))
+                .isInstanceOf(FileException.class)
+                .extracting(e -> ((FileException) e).getStatus())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+        verify(storage, never()).createDownloadUrl(anyString());
     }
 
     @Test
@@ -182,7 +211,7 @@ class FileServiceTest {
         when(repository.findById(7L)).thenReturn(Optional.of(file));
         when(storage.createDownloadUrl(anyString())).thenReturn(URI.create("https://r2.example/download"));
 
-        FileResponse response = fileService.getFile(7L);
+        FileResponse response = fileService.getFile(2L, 7L);
 
         // Defensive: ensure no field exposes the secret.
         assertThat(response.objectKey()).doesNotContain("SECRET");

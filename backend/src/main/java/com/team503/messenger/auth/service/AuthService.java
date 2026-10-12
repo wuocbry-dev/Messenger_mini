@@ -101,9 +101,20 @@ public class AuthService {
                 .filter(User::isActive)
                 .orElseThrow(this::invalidRefreshToken);
 
+        // Rotate: revoke the presented refresh token and issue a new one.
+        refreshToken.revoke(now);
+
+        String newRawRefreshToken = generateRefreshToken();
+        refreshTokenRepository.save(RefreshToken.issue(
+                user.getId(),
+                sha256Hex(newRawRefreshToken),
+                now.plusDays(jwtProperties.getRefreshTokenTtlDays()),
+                now
+        ));
+
         return new AuthResponse(
                 jwtService.generateAccessToken(user),
-                request.refreshToken(),
+                newRawRefreshToken,
                 "Bearer",
                 jwtService.getAccessTokenTtlSeconds(),
                 UserResponse.from(user)

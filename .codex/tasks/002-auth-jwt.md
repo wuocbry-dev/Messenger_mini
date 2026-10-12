@@ -1,151 +1,397 @@
-# Task
+# Task — Authentication + JWT
 
 ## Objective
 
-Implement the first authentication slice for Messenger Mini using Spring Security and JWT.
+Implement production-quality basic authentication for Messenger Mini.
 
-## Context
+Implement:
 
-The backend foundation is ready:
+- Register
+- Login
+- JWT access token
+- Refresh token
+- Refresh token rotation
+- Logout/revoke
+- Current user endpoint
 
-- Maven Wrapper exists and is verified.
-- Spring Boot starts locally.
-- MySQL schema is under Flyway control.
-- Existing schema is baselined at Flyway version `1`.
-- Hibernate validates the approved schema.
-- OpenAPI is available.
+Read:
 
-Authentication is an accepted project requirement, but no business auth flow has been implemented yet.
+- AGENTS.md
+- backend/AGENTS.md
+- docs/ARCHITECTURE.md
+- docs/DATABASE.md
+- docs/API_CONVENTIONS.md
+- docs/DECISIONS.md
 
-## Functional Requirements
+Inspect the current source before coding.
 
-- Implement register.
-- Implement login.
-- Implement access token generation.
-- Implement refresh token flow.
-- Implement logout/revoke refresh token.
-- Add a current-user endpoint.
-- Store users in the existing `users` table.
-- Store refresh tokens in the existing `refresh_tokens` table.
-- Hash passwords before storing them.
-- Never return `password_hash`.
-- Use request/response DTOs.
-- Keep code inside feature-based packages.
+==================================================
+1. API
+==================================================
 
-## API Contract
+Implement:
 
-Use `/api/v1/...` paths.
-
-Initial endpoints:
-
-```text
 POST /api/v1/auth/register
 POST /api/v1/auth/login
 POST /api/v1/auth/refresh
 POST /api/v1/auth/logout
-GET  /api/v1/users/me
-```
 
-Suggested request/response DTOs:
+GET /api/v1/users/me
 
-```text
-RegisterRequest
-LoginRequest
-RefreshTokenRequest
-AuthResponse
-UserResponse
-```
+Public:
 
-Exact DTO fields should be confirmed before implementation if not provided by the user.
+/api/v1/auth/register
+/api/v1/auth/login
+/api/v1/auth/refresh
+Swagger/OpenAPI resources
 
-## Business Rules
+Authenticated:
 
-- `username` must be unique.
-- `email` must be unique.
-- `password_hash` must never be exposed.
-- New users default to active status.
-- Login should only succeed for active users.
-- Refresh token values should be stored hashed, not plain text.
-- Logout should revoke the refresh token.
+/api/v1/auth/logout
+/api/v1/users/me
 
-## Database Impact
+==================================================
+2. FEATURE-BASED STRUCTURE
+==================================================
 
-Use existing tables:
+Use approximately:
 
-- `users`
-- `refresh_tokens`
+auth/
+├── controller/
+│   └── AuthController.java
+├── service/
+│   └── AuthService.java
+├── repository/
+│   └── RefreshTokenRepository.java
+├── entity/
+│   └── RefreshToken.java
+├── dto/
+│   ├── request/
+│   │   ├── RegisterRequest.java
+│   │   ├── LoginRequest.java
+│   │   └── RefreshTokenRequest.java
+│   └── response/
+│       └── AuthResponse.java
+└── mapper/
 
-Do not change schema unless a mismatch is found and a `V2__...` migration is explicitly needed.
+user/
+├── controller/
+│   └── UserController.java
+├── repository/
+│   └── UserRepository.java
+├── entity/
+│   └── User.java
+├── dto/response/
+│   └── UserResponse.java
+└── mapper/
 
-Future schema changes must start from `V2__...`.
+common/security/
+├── JwtService.java
+├── JwtAuthenticationFilter.java
+└── AuthenticatedUser.java if useful
 
-## Realtime Impact
+Do not create meaningless abstractions.
 
-None for this task.
+==================================================
+3. REGISTER
+==================================================
 
-## Security Requirements
+Register request:
 
-- Use Spring Security.
-- Use JWT access tokens.
-- Keep JWT secret backend-only.
-- Use password hashing, preferably BCrypt.
-- Do not log passwords, refresh tokens, JWTs, or secrets.
-- Do not expose DB credentials, R2 secrets, or Agora App Certificate.
-- Protect `/api/v1/users/me`.
-- Keep Swagger/OpenAPI endpoints accessible for development.
+- username
+- email
+- password
+- displayName
 
-## Error Cases
+Validation:
 
-- Duplicate username.
-- Duplicate email.
-- Invalid login credentials.
-- Inactive/blocked/deleted user login attempt.
-- Invalid refresh token.
-- Expired refresh token.
-- Revoked refresh token.
-- Missing bearer token for protected endpoint.
+username:
+- required
+- reasonable length
 
-## Tests
+email:
+- required
+- valid email format
 
-Add focused tests for:
+password:
+- required
+- minimum secure development length
 
-- Register success.
-- Duplicate username/email.
-- Password is hashed.
-- Login success.
-- Login rejects bad password.
-- Refresh token success.
-- Revoked refresh token rejection.
-- `/api/v1/users/me` requires authentication.
+displayName:
+- required
+- reasonable length
+
+Rules:
+
+- username must be unique
+- email must be unique
+- password must NEVER be stored raw
+- use BCrypt PasswordEncoder
+- status should become ACTIVE
+- server controls createdAt/updatedAt
+- client cannot supply id/passwordHash/status/timestamps
+
+Return a Response DTO, never User entity.
+
+==================================================
+4. LOGIN
+==================================================
+
+Allow login with the approved identifier strategy.
+
+Prefer username for initial scope unless existing documentation says
+otherwise.
+
+Verify password using BCrypt.
+
+On success issue:
+
+- short-lived access JWT
+- refresh token
+
+Do not place password/passwordHash inside JWT.
+
+JWT should contain minimal identity information such as user id and
+username/subject.
+
+==================================================
+5. REFRESH TOKENS
+==================================================
+
+Use existing refresh_tokens table.
+
+Security requirement:
+
+- generate cryptographically secure random refresh tokens
+- return the raw refresh token only to the client
+- store only a SHA-256 hash in MySQL
+- never store the raw refresh token
+- set expiry
+- implement rotation
+
+On refresh:
+
+1. hash received token
+2. locate matching DB row
+3. verify not expired
+4. verify not revoked
+5. revoke old refresh token
+6. issue new access token
+7. issue new refresh token
+8. persist new refresh-token hash
+
+==================================================
+6. LOGOUT
+==================================================
+
+Logout revokes the supplied/current refresh token.
+
+Access JWT can remain stateless and expire naturally.
+
+Do not create an access-token blacklist for this project unless required.
+
+==================================================
+7. SPRING SECURITY
+==================================================
+
+Replace temporary HTTP Basic setup with stateless JWT authentication.
+
+Use:
+
+SessionCreationPolicy.STATELESS
+
+Disable HTTP Basic.
+
+Keep CSRF handling appropriate for token-based REST.
+
+Install JwtAuthenticationFilter.
+
+Do not authenticate based on user-supplied userId headers.
+
+The authenticated user identity comes from validated JWT.
+
+==================================================
+8. /users/me
+==================================================
+
+GET /api/v1/users/me
+
+Return current authenticated user:
+
+- id
+- username
+- email
+- displayName
+- avatar info if available
+- status
+- lastSeenAt
+- createdAt
+
+Never return passwordHash.
+
+==================================================
+9. DTO / ENTITY RULE
+==================================================
+
+Entity != Request DTO != Response DTO.
+
+Controllers must not return JPA entities.
+
+Use mapping code or mapper class.
+
+Do not add MapStruct unless already approved.
+
+==================================================
+10. ERROR HANDLING
+==================================================
+
+Implement consistent errors for at least:
+
+- validation error
+- duplicate username
+- duplicate email
+- invalid credentials
+- invalid refresh token
+- expired refresh token
+- revoked refresh token
+- unauthorized request
+- user not found
+
+Use the project's API error convention.
+
+Add/update GlobalExceptionHandler if needed.
+
+Do not leak internal stack traces/password information.
+
+==================================================
+11. JWT CONFIG
+==================================================
+
+JWT secret must come from:
+
+JWT_SECRET
+
+Never hard-code it.
+
+Fail clearly in non-test runtime if a secure JWT secret is required but
+missing.
+
+Tests may provide test-specific secret configuration.
+
+Choose reasonable configurable values for:
+
+access token expiry
+refresh token expiry
+
+Document them.
+
+==================================================
+12. DATABASE
+==================================================
+
+Use the existing schema.
+
+Do NOT edit V1.
+
+If a schema change is genuinely necessary:
+
+create V2__... migration
+
+But avoid changing the approved schema unless required.
+
+==================================================
+13. OPENAPI
+==================================================
+
+Document endpoints through springdoc.
+
+Add Bearer JWT security scheme.
+
+Swagger UI should allow:
+
+Authorize -> Bearer token
+
+Do not expose refresh-token hashes.
+
+==================================================
+14. TESTS
+==================================================
+
+Add useful tests.
+
+At minimum cover:
+
+Register:
+- success
+- duplicate username
+- duplicate email
+- validation failure
+
+Login:
+- success
+- wrong password
+- unknown username
+
+Refresh:
+- valid
+- revoked
+- expired/invalid
+
+Security:
+- /users/me rejected without JWT
+- /users/me works with valid JWT
+
+Logout:
+- refresh token becomes unusable
+
+Use the existing test conventions.
+
+Do not wipe the developer's real MySQL data during tests.
+
+Prefer isolated test configuration.
+
+==================================================
+15. VERIFICATION
+==================================================
 
 Run:
 
-```bash
-cd backend
-.\mvnw.cmd clean verify
-```
+mvnw.cmd clean verify
 
-If local database integration is used, verify data preservation expectations and do not delete existing development data.
+Start backend.
 
-## Acceptance Criteria
+Verify APIs through HTTP/Swagger.
 
-- Auth endpoints compile and are documented by OpenAPI.
-- Passwords are stored hashed.
-- JWT access token is returned on register/login/refresh.
-- Refresh token is stored hashed.
-- Protected current-user endpoint works with a valid JWT.
-- No entity is returned directly from REST.
-- No secrets are committed or printed.
-- Maven verification passes.
+Do not begin Conversation or Chat implementation.
 
-## Out of Scope
+==================================================
+16. ACCEPTANCE CRITERIA
+==================================================
 
-- Frontend auth UI.
-- Email verification.
-- Password reset.
-- OAuth/social login.
-- Admin/user management screens.
-- Chat/conversation/message implementation.
-- Presence implementation.
-- File/R2 upload implementation.
-- Voice call implementation.
+Complete when:
+
+- Register works
+- passwords are BCrypt hashed
+- Login works
+- access JWT works
+- refresh rotation works
+- raw refresh tokens are not stored
+- Logout revokes refresh token
+- /users/me works
+- REST entities are not exposed
+- Swagger JWT authorization works
+- tests pass
+- clean verify passes
+- existing Flyway baseline remains valid
+
+Report:
+
+- files changed
+- endpoints created
+- security flow
+- tests run
+- Swagger verification
+- DB changes/migrations, if any
+- remaining issues
+
+Stop after Auth.

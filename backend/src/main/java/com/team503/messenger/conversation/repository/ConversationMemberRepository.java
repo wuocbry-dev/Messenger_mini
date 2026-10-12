@@ -18,5 +18,20 @@ public interface ConversationMemberRepository extends JpaRepository<Conversation
     @Query("SELECT CASE WHEN COUNT(cm) > 0 THEN true ELSE false END FROM ConversationMember cm WHERE cm.id.conversationId = :conversationId AND cm.id.userId = :userId AND cm.leftAt IS NULL")
     boolean existsActiveMember(@Param("conversationId") Long conversationId, @Param("userId") Long userId);
 
-    Optional<ConversationMember> findByConversationIdAndUserId(Long conversationId, Long userId);
+    @Query("SELECT cm FROM ConversationMember cm WHERE cm.id.conversationId = :conversationId AND cm.id.userId = :userId")
+    Optional<ConversationMember> findByConversationIdAndUserId(
+            @Param("conversationId") Long conversationId,
+            @Param("userId") Long userId
+    );
+
+    @Query("""
+            SELECT DISTINCT other.id.userId
+            FROM ConversationMember self
+            JOIN ConversationMember other ON other.id.conversationId = self.id.conversationId
+            WHERE self.id.userId = :userId
+              AND self.leftAt IS NULL
+              AND other.leftAt IS NULL
+              AND other.id.userId <> :userId
+            """)
+    List<Long> findActivePeerUserIds(@Param("userId") Long userId);
 }

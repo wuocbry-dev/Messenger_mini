@@ -53,7 +53,7 @@ R2StorageService   (real, AWS SDK v2 S3)
 Cloudflare R2
 ```
 
-`NoopObjectStorageService` is wired in when R2 is not configured so the application can still start (upload will then throw `UnsupportedOperationException`).
+`NoopObjectStorageService` is wired in when R2 is not configured so the application can still start (upload and download then fail with `503 STORAGE_UNAVAILABLE`).
 
 ### REST endpoints (task 008)
 
@@ -104,6 +104,10 @@ Content-Length: 102400
 
 <binary>
 ```
+
+#### Download access
+
+Only the uploader, or an active member of a conversation where the file is attached to a message, may call the download endpoint. Everyone else receives `404 FILE_NOT_FOUND`, so file ids cannot be probed.
 
 #### Download response (presigned GET)
 

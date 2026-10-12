@@ -27,7 +27,7 @@ The realtime 1-to-1 chat slice is implemented with WebSocket + STOMP. This slice
 
 ### Transport
 
-- **Endpoint**: `ws://<host>/ws` (native WebSocket).
+- **Endpoint**: `ws://<host>/ws` (native WebSocket, no SockJS fallback).
 - **STOMP broker prefixes** (configured in `WebSocketConfig`):
     - Application destination prefix: `/app`
     - User destination prefix: `/user`
@@ -127,7 +127,7 @@ Typing is **realtime only** — never persisted to MySQL. The principal sets `se
 | Direction | Destination | Payload | Notes |
 |---|---|---|---|
 | C → S | `/app/typing` | `TypingRequest` JSON | `{ "conversationId": 1, "typing": true }` |
-| S → C | `/topic/conversations/{conversationId}/typing` | `TypingIndicator` JSON | All members of the conversation room receive it. |
+| S → C | `/user/{username}/queue/typing` | `TypingIndicator` JSON | Sent only to the *other* active members. A shared `/topic/...` was dropped because STOMP SUBSCRIBE is not membership-checked, so any client could have listened to any conversation. |
 
 ```json
 {
@@ -176,4 +176,6 @@ Receipts are persisted to `message_receipts` and realtime-propagated to the conv
 | S → C | `/user/{username}/queue/presence` | Presence updates for the user (cross-device). |
 | S → C | `/user/{username}/queue/receipts` | Receipt updates addressed to the user. |
 | S → C | `/user/{username}/queue/calls` | Call state transitions addressed to the user. |
-| S → C | `/topic/conversations/{id}/typing` | Typing broadcast inside a conversation. |
+| S → C | `/user/{username}/queue/typing` | Typing indicator from the other member. |
+
+`/user/{username}/queue/...` is the server-side form used by `convertAndSendToUser`. **Clients subscribe without the username**, e.g. `/user/queue/messages`; Spring maps that to the authenticated session's private queue. Subscribing to `/user/<name>/queue/...` does not receive anything.

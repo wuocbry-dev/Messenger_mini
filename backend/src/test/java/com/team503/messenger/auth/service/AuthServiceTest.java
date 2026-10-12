@@ -146,7 +146,7 @@ class AuthServiceTest {
     }
 
     @Test
-    void refreshReturnsNewAccessTokenForValidRefreshToken() {
+    void refreshReturnsNewAccessTokenAndRotatesRefreshToken() {
         User user = activeUser(1L, "quocbry", "quoc@example.com", "password123");
         String rawRefreshToken = "valid-refresh-token";
         RefreshToken refreshToken = RefreshToken.issue(
@@ -157,12 +157,34 @@ class AuthServiceTest {
         );
         when(refreshTokenRepository.findByTokenHash(sha256Hex(rawRefreshToken))).thenReturn(Optional.of(refreshToken));
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(refreshTokenRepository.save(any(RefreshToken.class))).thenAnswer(inv -> inv.getArgument(0));
 
         var response = authService.refresh(new RefreshTokenRequest(rawRefreshToken));
 
         assertThat(response.accessToken()).isNotBlank();
-        assertThat(response.refreshToken()).isEqualTo(rawRefreshToken);
+        assertThat(response.refreshToken()).isNotEqualTo(rawRefreshToken);
         assertThat(response.user().username()).isEqualTo("quocbry");
+        assertThat(refreshToken.isRevoked()).isTrue();
+        ArgumentCaptor<RefreshToken> captor = ArgumentCaptor.forClass(RefreshToken.class);
+        verify(refreshTokenRepository).save(captor.capture());
+        assertThat(captor.getValue().getTokenHash()).isEqualTo(sha256Hex(response.refreshToken()));
+    }
+
+    @Test
+    void refreshRejectsAlreadyRotatedRefreshToken() {
+        String rawRefreshToken = "rotated-refresh-token";
+        RefreshToken refreshToken = RefreshToken.issue(
+                1L,
+                sha256Hex(rawRefreshToken),
+                LocalDateTime.now(CLOCK).plusDays(1),
+                LocalDateTime.now(CLOCK)
+        );
+        refreshToken.revoke(LocalDateTime.now(CLOCK));
+        when(refreshTokenRepository.findByTokenHash(sha256Hex(rawRefreshToken))).thenReturn(Optional.of(refreshToken));
+
+        assertThatThrownBy(() -> authService.refresh(new RefreshTokenRequest(rawRefreshToken)))
+                .isInstanceOf(AuthException.class)
+                .hasMessage("Refresh token is invalid");
     }
 
     @Test
