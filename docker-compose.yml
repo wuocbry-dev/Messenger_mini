@@ -1,0 +1,24 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: messenger-mini-mysql
+    environment:
+      MYSQL_DATABASE: ${DB_NAME:-messenger_mini}
+      MYSQL_USER: ${DB_USERNAME:-messenger_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-messenger_password}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password}
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      - messenger-mini-mysql-data:/var/lib/mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  messenger-mini-mysql-data:
