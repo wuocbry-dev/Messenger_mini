@@ -50,3 +50,25 @@ A simple error response may include:
 ## OpenAPI
 
 springdoc-openapi must document REST endpoints as they are implemented.
+
+## Authentication
+
+Initial authentication endpoints:
+
+```text
+POST /api/v1/auth/register
+POST /api/v1/auth/login
+POST /api/v1/auth/refresh
+POST /api/v1/auth/logout
+GET  /api/v1/users/me
+```
+
+Register accepts `username`, `email`, `password`, and `displayName`. Login accepts `usernameOrEmail` and `password`. Refresh and logout accept `refreshToken`.
+
+Access tokens are sent as:
+
+```text
+Authorization: Bearer <accessToken>
+```
+
+Refresh tokens are stored only as SHA-256 hashes in MySQL. Passwords are stored only as BCrypt hashes. API responses must not include `password_hash`, JWT secrets, refresh token hashes, or integration secrets.

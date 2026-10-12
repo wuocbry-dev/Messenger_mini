@@ -26,12 +26,17 @@ springdoc:
 app:
   jwt:
     secret: ${JWT_SECRET:}
+    access-token-ttl-seconds: ${JWT_ACCESS_TOKEN_TTL_SECONDS:900}
+    refresh-token-ttl-days: ${JWT_REFRESH_TOKEN_TTL_DAYS:30}
   storage:
     r2:
       endpoint: ${R2_ENDPOINT:}
       access-key-id: ${R2_ACCESS_KEY_ID:}
       secret-access-key: ${R2_SECRET_ACCESS_KEY:}
       bucket-name: ${R2_BUCKET_NAME:}
+      presigned-ttl-seconds: ${R2_PRESIGNED_TTL_SECONDS:900}
+      key-prefix: ${R2_KEY_PREFIX:messenger/}
   agora:
     app-id: ${AGORA_APP_ID:}
     app-certificate: ${AGORA_APP_CERTIFICATE:}
+    token-ttl-seconds: ${AGORA_TOKEN_TTL_SECONDS:600}
