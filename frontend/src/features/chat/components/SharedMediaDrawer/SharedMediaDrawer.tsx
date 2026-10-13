@@ -3,6 +3,7 @@ import { EmptyState } from '../../../../shared/components/ui/EmptyState';
 import { Skeleton } from '../../../../shared/components/ui/Skeleton';
 import type { Conversation, Message, MessageAttachment } from '../../../../shared/types';
 import { messageApi } from '../../api/messageApi';
+import { ImageLightbox } from '../ImageLightbox';
 import './SharedMediaDrawer.css';
 
 interface SharedMediaDrawerProps {
@@ -57,6 +58,7 @@ export function SharedMediaDrawer({ conversation, open, onClose }: SharedMediaDr
   const files = useMemo(() => attachments.filter(({ att }) => !isImage(att)), [attachments]);
 
   const [urls, setUrls] = useState<Record<number, string>>({});
+  const [viewer, setViewer] = useState<number | null>(null);
   useEffect(() => {
     const missing = Array.from(new Set(images.map(({ att }) => att.fileId))).filter((id) => !urls[id]);
     if (!open || missing.length === 0) return;
@@ -127,12 +129,12 @@ export function SharedMediaDrawer({ conversation, open, onClose }: SharedMediaDr
         ) : activeTab === 'media' ? (
           images.length > 0 ? (
             <div className="shared-media-grid">
-              {images.map(({ att, messageId }) => (
+              {images.map(({ att, messageId }, idx) => (
                 <button
                   key={`${messageId}-${att.id ?? att.fileId}`}
                   type="button"
                   className="shared-media-item"
-                  onClick={() => void openFile(att.fileId)}
+                  onClick={() => setViewer(idx)}
                   title={att.originalName ?? 'Open image'}
                 >
                   {urls[att.fileId] ? (
@@ -206,6 +208,14 @@ export function SharedMediaDrawer({ conversation, open, onClose }: SharedMediaDr
           />
         )}
       </div>
+      {viewer !== null && (
+        <ImageLightbox
+          images={images.map(({ att }) => ({ fileId: att.fileId, name: att.originalName }))}
+          urls={urls}
+          startIndex={viewer}
+          onClose={() => setViewer(null)}
+        />
+      )}
     </div>
   );
 }

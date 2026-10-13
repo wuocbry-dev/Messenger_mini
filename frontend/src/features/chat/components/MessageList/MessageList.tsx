@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { Message, MessageAttachment, MessageReceipt } from '../../../../shared/types';
 import { Avatar, EmptyState, Skeleton } from '../../../../shared/components/ui';
 import { messageApi } from '../../api';
+import { ImageLightbox, type LightboxImage } from '../ImageLightbox';
 import './MessageList.css';
 
 interface MessageListProps {
@@ -38,6 +39,39 @@ function isImageAttachment(attachment: MessageAttachment): boolean {
   return attachment.attachmentType === 'IMAGE' || attachment.mimeType?.startsWith('image/') === true;
 }
 
+/** Images sent within this window by the same person are shown as one group. */
+const GROUP_WINDOW_MS = 2 * 60 * 1000;
+
+interface MessageGroup {
+  messages: Message[];
+}
+
+function isImageOnly(msg: Message): boolean {
+  const atts = msg.attachments ?? [];
+  return atts.length > 0 && !msg.content?.trim() && atts.every(isImageAttachment);
+}
+
+function groupMessages(messages: Message[]): MessageGroup[] {
+  const groups: MessageGroup[] = [];
+  for (const msg of messages) {
+    const last = groups[groups.length - 1];
+    const prev = last?.messages[last.messages.length - 1];
+    if (
+      prev &&
+      isImageOnly(msg) &&
+      isImageOnly(prev) &&
+      prev.senderId === msg.senderId &&
+      new Date(prev.createdAt).toDateString() === new Date(msg.createdAt).toDateString() &&
+      new Date(msg.createdAt).getTime() - new Date(prev.createdAt).getTime() <= GROUP_WINDOW_MS
+    ) {
+      last.messages.push(msg);
+    } else {
+      groups.push({ messages: [msg] });
+    }
+  }
+  return groups;
+}
+
 function formatFileSize(bytes?: number): string | null {
   if (!bytes) return null;
   if (bytes > 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
@@ -67,6 +101,8 @@ function ReceiptIcon({ receipt }: { receipt: MessageReceipt }) {
 export function MessageList({ messages, currentUserId, typingUser, typingUserAvatar, loading, getUserAvatar }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [fileUrls, setFileUrls] = useState<Record<number, string>>({});
+  const [lightbox, setLightbox] = useState<{ images: LightboxImage[]; index: number } | null>(null);
+  const groups = useMemo(() => groupMessages(messages), [messages]);
 
   const openAttachment = async (fileId: number) => {
     const file = await messageApi.getFile(fileId);
@@ -144,19 +180,28 @@ export function MessageList({ messages, currentUserId, typingUser, typingUserAva
 
   return (
     <div className="message-list" role="log" aria-live="polite" aria-label="Messages">
-      {messages.map((msg, i) => {
+      {groups.map((group, i) => {
+        const first = group.messages[0];
+        const msg = group.messages[group.messages.length - 1]; // time/receipt of the latest
+        const prevGroup = groups[i - 1];
         const isOwn = msg.senderId === currentUserId;
-        const showDate = shouldShowDate(messages[i - 1] ?? null, msg);
-        const attachments = msg.attachments ?? [];
+        const showDate = shouldShowDate(
+          prevGroup ? prevGroup.messages[prevGroup.messages.length - 1] : null,
+          first
+        );
+        const attachments = group.messages.flatMap((m) => m.attachments ?? []);
+        const lightboxImages: LightboxImage[] = attachments
+          .filter(isImageAttachment)
+          .map((a) => ({ fileId: a.fileId, name: a.originalName }));
         const imageAttachments = attachments.filter(isImageAttachment);
         const fileAttachments = attachments.filter((attachment) => !isImageAttachment(attachment));
         const hasAttachments = imageAttachments.length > 0 || fileAttachments.length > 0;
 
         return (
-          <React.Fragment key={msg.id}>
+          <React.Fragment key={first.id}>
             {showDate && (
               <div className="date-divider">
-                <span className="date-divider-text">{formatDate(msg.createdAt)}</span>
+                <span className="date-divider-text">{formatDate(first.createdAt)}</span>
               </div>
             )}
             <div className={`message-row${isOwn ? ' message-row--own' : ''}`}>
@@ -174,7 +219,31 @@ export function MessageList({ messages, currentUserId, typingUser, typingUserAva
                 {msg.type === 'TEXT' && (
                   <p className="message-content">{msg.content}</p>
                 )}
-                {imageAttachments.length > 0 && (
+                {imageAttachments.length > 1 && (
+                  <div className="message-attachment">
+                    <span className="message-stack-label">
+                      {isOwn ? 'You' : msg.senderDisplayName} sent {imageAttachments.length} photos
+                    </span>
+                    <button
+                      type="button"
+                      className="message-stack"
+                      onClick={() => setLightbox({ images: lightboxImages, index: 0 })}
+                      aria-label={`Open ${imageAttachments.length} photos`}
+                    >
+                      {imageAttachments.slice(0, 3).map((attachment, layer) => (
+                        <span key={attachment.id ?? attachment.fileId} className={`message-stack-card message-stack-card--${layer}`}>
+                          {fileUrls[attachment.fileId] ? (
+                            <img src={fileUrls[attachment.fileId]} alt="" />
+                          ) : null}
+                        </span>
+                      ))}
+                      {imageAttachments.length > 3 && (
+                        <span className="message-stack-more">+{imageAttachments.length - 3}</span>
+                      )}
+                    </button>
+                  </div>
+                )}
+                {imageAttachments.length === 1 && (
                   <div className="message-attachment">
                     <div className={`message-image-grid${imageAttachments.length === 1 ? ' message-image-grid--single' : ''}`}>
                       {imageAttachments.map((attachment) => {
@@ -184,7 +253,12 @@ export function MessageList({ messages, currentUserId, typingUser, typingUserAva
                             key={attachment.id ?? attachment.fileId}
                             type="button"
                             className="message-image-button"
-                            onClick={() => void openAttachment(attachment.fileId)}
+                            onClick={() =>
+                              setLightbox({
+                                images: lightboxImages,
+                                index: Math.max(0, lightboxImages.findIndex((x) => x.fileId === attachment.fileId)),
+                              })
+                            }
                             title={attachment.originalName ?? 'Open image'}
                           >
                             <img
@@ -258,6 +332,15 @@ export function MessageList({ messages, currentUserId, typingUser, typingUserAva
       )}
 
       <div ref={bottomRef} />
+
+      {lightbox && (
+        <ImageLightbox
+          images={lightbox.images}
+          urls={fileUrls}
+          startIndex={lightbox.index}
+          onClose={() => setLightbox(null)}
+        />
+      )}
     </div>
   );
 }

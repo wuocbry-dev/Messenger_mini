@@ -312,3 +312,59 @@
   color: white;
   border: none;
 }
+
+/* Grouped photos: a fanned stack that opens the in-page viewer */
+.message-stack-label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.message-stack {
+  position: relative;
+  display: block;
+  width: 200px;
+  height: 190px;
+  margin: var(--space-2) 0 var(--space-3);
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.message-stack-card {
+  position: absolute;
+  inset: 8px 14px 8px 14px;
+  overflow: hidden;
+  border: 3px solid var(--color-surface);
+  border-radius: var(--radius-2xl);
+  background: var(--color-border);
+  box-shadow: 0 8px 22px rgba(17, 24, 39, 0.22);
+  transition: transform var(--transition-base);
+}
+
+.message-stack-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.message-stack-card--0 { z-index: 3; transform: rotate(0deg); }
+.message-stack-card--1 { z-index: 2; transform: rotate(-7deg) translateX(-10px); }
+.message-stack-card--2 { z-index: 1; transform: rotate(7deg) translateX(10px); }
+
+.message-stack:hover .message-stack-card--1 { transform: rotate(-11deg) translateX(-18px); }
+.message-stack:hover .message-stack-card--2 { transform: rotate(11deg) translateX(18px); }
+
+.message-stack-more {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  z-index: 4;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  background: rgba(17, 24, 39, 0.75);
+  color: #fff;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+}

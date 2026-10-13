@@ -121,3 +121,124 @@
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* Staged attachments tray */
+.message-tray {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  padding: var(--space-3);
+  background: #1f2937;
+  border-radius: var(--radius-2xl);
+}
+
+.message-tray-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border: none;
+  border-radius: var(--radius-xl);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.message-tray-add:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.message-tray-add:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.message-tray-items {
+  display: flex;
+  gap: var(--space-3);
+  min-width: 0;
+  padding-top: 8px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.message-tray-item {
+  position: relative;
+  flex-shrink: 0;
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-xl);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.message-tray-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--radius-xl);
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-sizing: border-box;
+  display: block;
+}
+
+.message-tray-item--file {
+  width: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px;
+  font-size: 0.7rem;
+}
+
+.message-tray-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-tray-size {
+  opacity: 0.65;
+}
+
+.message-tray-remove {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #fff;
+  color: #374151;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+.message-tray-remove:hover:not(:disabled) {
+  background: var(--color-danger);
+  color: #fff;
+}
+
+.message-input-notice {
+  margin: 0 0 var(--space-2);
+  padding: 0 var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-danger);
+}
+
+.message-upload-spinner--on-send {
+  border-color: var(--color-border);
+  border-top-color: var(--color-primary);
+}

@@ -190,20 +190,28 @@ export function ChatPanel({
     [activeConversation, stompSend]
   );
 
+  // Resolves false only when nothing was sent, so the composer keeps the tray
+  // for a retry; after a partial send it reports the failure and clears it to
+  // avoid re-sending the files that already went out.
   const handleAttach = useCallback(
-    async (files: File[]) => {
-      if (!activeConversation) return;
+    async (files: File[]): Promise<boolean> => {
+      if (!activeConversation) return false;
+      let sent = 0;
       try {
         for (const file of files) {
           const uploaded = await messageApi.uploadAttachment(file);
           const type = file.type.startsWith('image/') ? 'IMAGE' : 'FILE';
           const message = await messageApi.sendAttachment(activeConversation.id, uploaded.fileId, type);
+          sent += 1;
           setMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, message]));
         }
         onRefreshConversations();
+        return true;
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to send file';
-        onError?.(message);
+        const reason = err instanceof Error ? err.message : 'Failed to send file';
+        onError?.(sent > 0 ? `Sent ${sent} of ${files.length} files. ${reason}` : reason);
+        if (sent > 0) onRefreshConversations();
+        return sent > 0;
       }
     },
     [activeConversation, onError, onRefreshConversations]
