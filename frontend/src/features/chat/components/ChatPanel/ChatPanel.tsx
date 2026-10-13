@@ -259,35 +259,37 @@ export function ChatPanel({
       <main className="chat-main">
         {activeConversation ? (
           <>
-            <ChatHeader
-              conversation={activeConversation}
-              currentUserId={currentUserId}
-              online={otherUserId ? onlineUsers.has(otherUserId) : false}
-              lastSeenAt={otherUserId ? presence.get(otherUserId)?.lastSeenAt : undefined}
-              typing={!!typingUser}
-              otherUserName={otherUserName}
-              otherUserAvatar={otherUserAvatar}
-              otherUserId={otherUserId}
-              onCallClick={handleStartCall}
-              onVideoCallClick={handleStartVideoCall}
-              callInProgress={!!activeCall}
-              onMenuClick={() => setSidebarOpen(true)}
-              onMediaClick={() => setMediaDrawerOpen(true)}
-            />
-            <MessageList
-              messages={messages}
-              currentUserId={currentUserId}
-              typingUser={typingUser}
-              typingUserAvatar={otherUserAvatar}
-              loading={messagesLoading}
-              getUserAvatar={getUserAvatar}
-            />
-            <MessageInput
-              conversationId={activeConversation.id}
-              onSend={handleSend}
-              onTyping={handleTypingSignal}
-              onAttach={handleAttach}
-            />
+            <div className="chat-column">
+              <ChatHeader
+                conversation={activeConversation}
+                currentUserId={currentUserId}
+                online={otherUserId ? onlineUsers.has(otherUserId) : false}
+                lastSeenAt={otherUserId ? presence.get(otherUserId)?.lastSeenAt : undefined}
+                typing={!!typingUser}
+                otherUserName={otherUserName}
+                otherUserAvatar={otherUserAvatar}
+                otherUserId={otherUserId}
+                onCallClick={handleStartCall}
+                onVideoCallClick={handleStartVideoCall}
+                callInProgress={!!activeCall}
+                onMenuClick={() => setSidebarOpen(true)}
+                onMediaClick={() => setMediaDrawerOpen((o) => !o)}
+              />
+              <MessageList
+                messages={messages}
+                currentUserId={currentUserId}
+                typingUser={typingUser}
+                typingUserAvatar={otherUserAvatar}
+                loading={messagesLoading}
+                getUserAvatar={getUserAvatar}
+              />
+              <MessageInput
+                conversationId={activeConversation.id}
+                onSend={handleSend}
+                onTyping={handleTypingSignal}
+                onAttach={handleAttach}
+              />
+            </div>
             <SharedMediaDrawer
               conversation={activeConversation}
               open={mediaDrawerOpen}

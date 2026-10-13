@@ -11,7 +11,7 @@
   position: relative;
   flex: 1;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   min-width: 0;
   overflow: hidden;
   background: var(--color-surface);
@@ -24,4 +24,13 @@
   justify-content: center;
   background: var(--color-bg);
   padding: var(--space-8);
+}
+
+/* Header, messages and composer; shrinks when the Shared panel pushes in. */
+.chat-column {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }

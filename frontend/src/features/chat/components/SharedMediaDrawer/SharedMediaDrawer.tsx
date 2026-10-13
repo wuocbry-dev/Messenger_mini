@@ -90,10 +90,14 @@ export function SharedMediaDrawer({ conversation, open, onClose }: SharedMediaDr
     }
   }, []);
 
-  if (!open) return null;
-
+  // Always mounted so it can slide in and out; hidden from assistive tech
+  // and the tab order while closed.
   return (
-    <div className="shared-media-drawer">
+    <div
+      className={`shared-media-drawer${open ? ' shared-media-drawer--open' : ''}`}
+      aria-hidden={!open}
+    >
+    <div className="shared-media-panel">
       <div className="shared-media-header">
         <h3 className="shared-media-title">Shared</h3>
         <button className="shared-media-close" onClick={onClose} aria-label="Close">
@@ -216,6 +220,7 @@ export function SharedMediaDrawer({ conversation, open, onClose }: SharedMediaDr
           onClose={() => setViewer(null)}
         />
       )}
+    </div>
     </div>
   );
 }
