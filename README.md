@@ -35,7 +35,6 @@ Client-server. Modular monolith backend (`com.team503.messenger`). Feature-based
 |-- README.md                         # This file
 |-- .env.example                     # Root env vars
 |-- docker-compose.yml               # MySQL for local dev
-|-- .codex/tasks/                   # Feature task specs
 |-- docs/                           # Architecture & API docs
 |-- backend/                        # Spring Boot app
 |   |-- src/main/java/com/team503/messenger/
@@ -124,5 +123,4 @@ The backend owns authorization, call state, channel naming, and Agora token gene
 ## Codex Workflow
 
 - `AGENTS.md` — stable project contract for AI agents.
-- `.codex/tasks/` — feature task specifications.
 - `docs/` — architecture decisions and API contracts.

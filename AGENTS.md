@@ -77,11 +77,9 @@ Controllers and WebSocket handlers call services. Services coordinate business r
 - Update `docs/DECISIONS.md` only for accepted architecture decisions.
 - Do not silently erase historical design decisions after completing a task.
 
-## 16. Future Task Specifications
-- If the user explicitly asks Codex to execute the active task, read `.codex/ACTIVE_TASK.md`.
-- Do not automatically treat an old `.codex/ACTIVE_TASK.md` as current unless the user explicitly says to execute or use it.
-- Read `.codex/tasks/<task>.md` only when the user or active task explicitly references it.
-- Current direct user instructions have priority over task files.
+## 16. Task Instructions
+- Task specification files are no longer kept in the repository.
+- Current direct user instructions are the source of truth for the task at hand.
 
 ## 17. Forbidden Changes Without Approval
 Do not switch away from Spring Boot, Vite React TypeScript, MySQL, Flyway, WebSocket/STOMP, Cloudflare R2, Agora RTC, feature-based modular monolith architecture, or Spring Security + JWT unless the user explicitly approves the change.
