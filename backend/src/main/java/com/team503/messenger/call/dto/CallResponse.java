@@ -20,11 +20,7 @@ public record CallResponse(
         String endReason
 ) {
 
-    public static CallResponse from(
-            Call call,
-            String callerUsername,
-            String calleeUsername
-    ) {
+    public static CallResponse from(Call call, String callerUsername, String calleeUsername) {
         return new CallResponse(
                 call.getId(),
                 call.getConversationId(),
@@ -39,7 +35,7 @@ public record CallResponse(
                 call.getAnsweredAt(),
                 call.getEndedAt(),
                 call.getEndedBy(),
-                call.getEndReason()
+                call.getEndReason() == null ? null : call.getEndReason().name()
         );
     }
 }

@@ -50,3 +50,4 @@ app:
     app-id: ${AGORA_APP_ID:}
     app-certificate: ${AGORA_APP_CERTIFICATE:}
     token-ttl-seconds: ${AGORA_TOKEN_TTL_SECONDS:600}
+    ring-timeout-seconds: ${AGORA_RING_TIMEOUT_SECONDS:45}

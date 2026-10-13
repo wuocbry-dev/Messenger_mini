@@ -20,6 +20,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/calls")
 public class CallController {
 
+    private static final int MAX_PAGE_SIZE = 100;
+
     private final CallService callService;
 
     public CallController(CallService callService) {
@@ -35,50 +37,32 @@ public class CallController {
     }
 
     @PostMapping("/{callId}/accept")
-    CallResponse acceptCall(
-            @AuthenticationPrincipal AuthenticatedUser currentUser,
-            @PathVariable Long callId
-    ) {
+    CallResponse acceptCall(@AuthenticationPrincipal AuthenticatedUser currentUser, @PathVariable Long callId) {
         return callService.acceptCall(currentUser.id(), callId);
     }
 
     @PostMapping("/{callId}/reject")
-    CallResponse rejectCall(
-            @AuthenticationPrincipal AuthenticatedUser currentUser,
-            @PathVariable Long callId
-    ) {
+    CallResponse rejectCall(@AuthenticationPrincipal AuthenticatedUser currentUser, @PathVariable Long callId) {
         return callService.rejectCall(currentUser.id(), callId);
     }
 
     @PostMapping("/{callId}/cancel")
-    CallResponse cancelCall(
-            @AuthenticationPrincipal AuthenticatedUser currentUser,
-            @PathVariable Long callId
-    ) {
+    CallResponse cancelCall(@AuthenticationPrincipal AuthenticatedUser currentUser, @PathVariable Long callId) {
         return callService.cancelCall(currentUser.id(), callId);
     }
 
     @PostMapping("/{callId}/end")
-    CallResponse endCall(
-            @AuthenticationPrincipal AuthenticatedUser currentUser,
-            @PathVariable Long callId
-    ) {
+    CallResponse endCall(@AuthenticationPrincipal AuthenticatedUser currentUser, @PathVariable Long callId) {
         return callService.endCall(currentUser.id(), callId);
     }
 
     @PostMapping("/{callId}/token")
-    CallTokenResponse issueToken(
-            @AuthenticationPrincipal AuthenticatedUser currentUser,
-            @PathVariable Long callId
-    ) {
+    CallTokenResponse issueToken(@AuthenticationPrincipal AuthenticatedUser currentUser, @PathVariable Long callId) {
         return callService.issueToken(currentUser.id(), callId);
     }
 
     @GetMapping("/{callId}")
-    CallResponse getCall(
-            @AuthenticationPrincipal AuthenticatedUser currentUser,
-            @PathVariable Long callId
-    ) {
+    CallResponse getCall(@AuthenticationPrincipal AuthenticatedUser currentUser, @PathVariable Long callId) {
         return callService.getCall(currentUser.id(), callId);
     }
 
@@ -88,7 +72,7 @@ public class CallController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return callService.listHistory(currentUser.id(), page, size);
+        return callService.listHistory(currentUser.id(), Math.max(page, 0), clamp(size));
     }
 
     @GetMapping("/conversations/{conversationId}")
@@ -98,6 +82,10 @@ public class CallController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return callService.listConversationHistory(currentUser.id(), conversationId, page, size);
+        return callService.listConversationHistory(currentUser.id(), conversationId, Math.max(page, 0), clamp(size));
+    }
+
+    private static int clamp(int size) {
+        return Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
     }
 }

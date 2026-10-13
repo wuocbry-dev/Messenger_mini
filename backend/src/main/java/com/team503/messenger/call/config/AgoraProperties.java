@@ -1,26 +1,21 @@
 package com.team503.messenger.call.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.validation.annotation.Validated;
 
 @ConfigurationProperties(prefix = "app.agora")
-@Validated
 public class AgoraProperties {
 
-    /**
-     * Agora App ID (public).
-     */
+    /** Agora App ID (public). */
     private String appId;
 
-    /**
-     * Agora App Certificate (backend-only, never exposed to frontend).
-     */
+    /** Agora App Certificate (backend-only, never exposed). */
     private String appCertificate;
 
-    /**
-     * Token validity window in seconds.
-     */
+    /** RTC token validity in seconds. */
     private long tokenTtlSeconds = 600;
+
+    /** Seconds a call may ring before it is marked MISSED. */
+    private long ringTimeoutSeconds = 45;
 
     public String getAppId() {
         return appId;
@@ -44,5 +39,13 @@ public class AgoraProperties {
 
     public void setTokenTtlSeconds(long tokenTtlSeconds) {
         this.tokenTtlSeconds = tokenTtlSeconds;
+    }
+
+    public long getRingTimeoutSeconds() {
+        return ringTimeoutSeconds;
+    }
+
+    public void setRingTimeoutSeconds(long ringTimeoutSeconds) {
+        this.ringTimeoutSeconds = ringTimeoutSeconds;
     }
 }

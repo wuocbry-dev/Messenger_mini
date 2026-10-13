@@ -68,6 +68,8 @@ public class GlobalExceptionHandler {
         ));
     }
 
+    
+
     @ExceptionHandler(CallException.class)
     ResponseEntity<ErrorResponse> handleCallException(CallException exception, HttpServletRequest request) {
         return ResponseEntity.status(exception.getStatus()).body(new ErrorResponse(

@@ -1,135 +1,102 @@
 package com.team503.messenger.call.service;
 
 import com.team503.messenger.call.config.AgoraProperties;
+import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.HashMap;
+import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
+import java.time.Clock;
+import java.util.Base64;
 import java.util.Map;
+import java.util.TreeMap;
+import java.util.zip.Deflater;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.stereotype.Service;
 
 /**
- * Agora RTC token generation. Implements the public Agora token builder
- * spec v0 (HMAC-SHA256 over the packed signing key). The App Certificate
- * is held only by this service and is never returned in any DTO or HTTP
- * response.
+ * Agora RTC token generation using the AccessToken2 ("007") format.
  *
- * <p>Tokens are short-lived (default 600s) and are never persisted in MySQL.
- *
- * <p>Format reference: Agora docs for "Generate an RTC Token".
- * The on-wire format is:
+ * <p>Layout (integers little-endian, strings are uint16 length + bytes):
  * <pre>
- *   signingKey = HKDF(appCertificate, appId, channelName, uid)
- *   payload    = { appId, ts, salt, channelName, uid, expiredTs }
- *   token      = base64url(header) + "." + base64url(payload) + "." + base64url(HMAC_SHA256(signingKey, header.payload))
+ *   token       = "007" + base64(zlib(pack(signature) + signingInfo))
+ *   signingInfo = pack(appId) + uint32 issueTs + uint32 expire + uint32 salt
+ *                 + uint16 serviceCount + service...
+ *   signingKey  = HMAC(salt, HMAC(issueTs, appCertificate))
+ *   service     = uint16 type(1=RTC) + map(uint16 -> uint32) privileges
+ *                 + pack(channelName) + pack(uid)
  * </pre>
+ *
+ * <p>The App Certificate never leaves this class. Tokens are short-lived and
+ * never persisted.
  */
 @Service
 public class DefaultAgoraTokenService implements AgoraTokenService {
 
-    private final AgoraProperties properties;
+    private static final String VERSION = "007";
+    private static final int SERVICE_TYPE_RTC = 1;
+    private static final int PRIVILEGE_JOIN_CHANNEL = 1;
+    private static final int PRIVILEGE_PUBLISH_AUDIO = 2;
 
-    public DefaultAgoraTokenService(AgoraProperties properties) {
+    private final AgoraProperties properties;
+    private final Clock clock;
+    private final SecureRandom random = new SecureRandom();
+
+    public DefaultAgoraTokenService(AgoraProperties properties, Clock clock) {
         this.properties = properties;
+        this.clock = clock;
     }
 
     @Override
     public String generateRtcToken(String channelName, long userId, int expiresInSeconds) {
-        if (properties.getAppId() == null || properties.getAppId().isBlank()) {
+        String appId = properties.getAppId();
+        String certificate = properties.getAppCertificate();
+        if (appId == null || appId.isBlank()) {
             throw new IllegalStateException("Agora App ID is not configured");
         }
-        if (properties.getAppCertificate() == null || properties.getAppCertificate().isBlank()) {
+        if (certificate == null || certificate.isBlank()) {
             throw new IllegalStateException("Agora App Certificate is not configured");
         }
 
         int ttl = expiresInSeconds > 0
                 ? expiresInSeconds
                 : Math.toIntExact(properties.getTokenTtlSeconds());
+        int issueTs = (int) clock.instant().getEpochSecond();
+        int salt = random.nextInt(Integer.MAX_VALUE) + 1;
 
-        int currentTimestamp = (int) (System.currentTimeMillis() / 1000L);
-        int expiredTs = currentTimestamp + ttl;
+        // Privilege values are seconds relative to issueTs.
+        Map<Integer, Integer> privileges = new TreeMap<>();
+        privileges.put(PRIVILEGE_JOIN_CHANNEL, ttl);
+        privileges.put(PRIVILEGE_PUBLISH_AUDIO, ttl);
 
-        // 1) Compute the signing key
-        byte[] signingKey = computeSigningKey(
-                properties.getAppId(),
-                properties.getAppCertificate(),
-                channelName,
-                (int) userId,
-                currentTimestamp,
-                expiredTs
-        );
+        ByteArrayOutputStream service = new ByteArrayOutputStream();
+        writeUInt16(service, SERVICE_TYPE_RTC);
+        writeUInt16(service, privileges.size());
+        privileges.forEach((k, v) -> {
+            writeUInt16(service, k);
+            writeUInt32(service, v);
+        });
+        writeString(service, channelName);
+        writeString(service, Long.toString(userId));
 
-        // 2) Build the JWT-like payload
-        Map<String, Object> header = new HashMap<>();
-        header.put("typ", "JWT");
-        header.put("alg", "HS256");
-        String headerB64 = base64UrlEncode(toJson(header));
+        ByteArrayOutputStream signingInfo = new ByteArrayOutputStream();
+        writeString(signingInfo, appId);
+        writeUInt32(signingInfo, issueTs);
+        writeUInt32(signingInfo, ttl);
+        writeUInt32(signingInfo, salt);
+        writeUInt16(signingInfo, 1);
+        signingInfo.writeBytes(service.toByteArray());
 
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("appId", properties.getAppId());
-        payload.put("channelName", channelName);
-        payload.put("uid", userId);
-        payload.put("expiredTs", expiredTs);
-        payload.put("ts", currentTimestamp);
-        String payloadB64 = base64UrlEncode(toJson(payload));
+        byte[] signingKey = hmacSha256(uint32(issueTs), certificate.getBytes(StandardCharsets.UTF_8));
+        signingKey = hmacSha256(uint32(salt), signingKey);
+        byte[] signature = hmacSha256(signingKey, signingInfo.toByteArray());
 
-        // 3) Sign
-        String signingInput = headerB64 + "." + payloadB64;
-        byte[] signature = hmacSha256(signingKey, signingInput.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        String signatureB64 = base64UrlEncode(signature);
+        ByteArrayOutputStream content = new ByteArrayOutputStream();
+        writeBytes(content, signature);
+        content.writeBytes(signingInfo.toByteArray());
 
-        return signingInput + "." + signatureB64;
-    }
-
-    /**
-     * Compute the signing key. The public Agora token builder uses a series
-     * of HMAC-SHA256 calls chained with the message length, similar to a
-     * simplified HKDF. We mirror that here to keep the token format
-     * compatible with the Agora client SDK which validates the token using
-     * the same derivation.
-     */
-    private static byte[] computeSigningKey(
-            String appId,
-            String appCertificate,
-            String channelName,
-            int uid,
-            int currentTimestamp,
-            int expiredTs
-    ) {
-        byte[] signature = hmacSha256(
-                appCertificate.getBytes(java.nio.charset.StandardCharsets.UTF_8),
-                appId.getBytes(java.nio.charset.StandardCharsets.UTF_8)
-        );
-
-        byte[] channelNameBytes = channelName.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        byte[] buf = pack(currentTimestamp, expiredTs);
-        byte[] toSign = new byte[channelNameBytes.length + buf.length];
-        System.arraycopy(channelNameBytes, 0, toSign, 0, channelNameBytes.length);
-        System.arraycopy(buf, 0, toSign, channelNameBytes.length, buf.length);
-        signature = hmacSha256(signature, toSign);
-
-        // For numeric UIDs: sign the uid + "CONFLICT_STRING". For string
-        // UIDs, sign the user account. We only emit numeric UIDs in this
-        // slice.
-        byte[] uidBytes = pack(uid);
-        byte[] conflict = "CONFLICT".getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        byte[] uidSigned = new byte[uidBytes.length + conflict.length];
-        System.arraycopy(uidBytes, 0, uidSigned, 0, uidBytes.length);
-        System.arraycopy(conflict, 0, uidSigned, uidBytes.length, conflict.length);
-        signature = hmacSha256(signature, uidSigned);
-
-        // Final step: pack salt+ts+expiredTs and sign again
-        byte[] finalBuf = pack(currentTimestamp, expiredTs, /*salt*/ 0);
-        return hmacSha256(signature, finalBuf);
-    }
-
-    private static byte[] pack(int... values) {
-        ByteBuffer buffer = ByteBuffer.allocate(values.length * 4).order(ByteOrder.BIG_ENDIAN);
-        for (int v : values) {
-            buffer.putInt(v);
-        }
-        return buffer.array();
+        return VERSION + Base64.getEncoder().encodeToString(zlib(content.toByteArray()));
     }
 
     private static byte[] hmacSha256(byte[] key, byte[] data) {
@@ -142,40 +109,37 @@ public class DefaultAgoraTokenService implements AgoraTokenService {
         }
     }
 
-    private static String toJson(Map<String, Object> map) {
-        // Minimal hand-rolled JSON encoder to avoid pulling in jackson for
-        // the token builder. Order is not significant for the token because
-        // the receiver only HMACs the base64-url-encoded string; the same
-        // string is produced for the same input map.
-        StringBuilder sb = new StringBuilder("{");
-        boolean first = true;
-        for (Map.Entry<String, Object> e : map.entrySet()) {
-            if (!first) {
-                sb.append(',');
-            }
-            first = false;
-            sb.append('"').append(escape(e.getKey())).append('"').append(':');
-            Object v = e.getValue();
-            if (v instanceof Number) {
-                sb.append(v);
-            } else {
-                sb.append('"').append(escape(String.valueOf(v))).append('"');
-            }
+    private static byte[] zlib(byte[] data) {
+        Deflater deflater = new Deflater();
+        deflater.setInput(data);
+        deflater.finish();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] buf = new byte[1024];
+        while (!deflater.finished()) {
+            out.write(buf, 0, deflater.deflate(buf));
         }
-        sb.append('}');
-        return sb.toString();
+        deflater.end();
+        return out.toByteArray();
     }
 
-    private static String escape(String s) {
-        return s.replace("\\", "\\\\").replace("\"", "\\\"");
+    private static byte[] uint32(int v) {
+        return ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(v).array();
     }
 
-    private static String base64UrlEncode(byte[] data) {
-        String standard = java.util.Base64.getEncoder().encodeToString(data);
-        return standard.replace('+', '-').replace('/', '_').replace("=", "");
+    private static void writeUInt16(ByteArrayOutputStream out, int v) {
+        out.writeBytes(ByteBuffer.allocate(2).order(ByteOrder.LITTLE_ENDIAN).putShort((short) v).array());
     }
 
-    private static String base64UrlEncode(String s) {
-        return base64UrlEncode(s.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    private static void writeUInt32(ByteArrayOutputStream out, int v) {
+        out.writeBytes(uint32(v));
+    }
+
+    private static void writeBytes(ByteArrayOutputStream out, byte[] bytes) {
+        writeUInt16(out, bytes.length);
+        out.writeBytes(bytes);
+    }
+
+    private static void writeString(ByteArrayOutputStream out, String s) {
+        writeBytes(out, s.getBytes(StandardCharsets.UTF_8));
     }
 }

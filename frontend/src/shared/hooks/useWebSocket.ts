@@ -9,7 +9,10 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { Stomp, type Client } from 'stompjs/lib/stomp.js';
 
-const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8080/ws';
+// Default: same origin (ws/wss follows the page protocol) via the Vite dev proxy.
+const WS_URL =
+  import.meta.env.VITE_WS_URL ??
+  `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws`;
 
 export interface WsHandlers {
   onMessage?: (payload: unknown) => void;

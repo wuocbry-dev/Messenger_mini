@@ -8,78 +8,84 @@ import org.junit.jupiter.api.Test;
 
 class CallTest {
 
-    private static final LocalDateTime NOW = LocalDateTime.of(2026, 10, 12, 12, 0);
+    private static final LocalDateTime T0 = LocalDateTime.of(2026, 10, 13, 12, 0);
+    private static final LocalDateTime T1 = T0.plusSeconds(30);
 
-    @Test
-    void ringingHasInitialState() {
-        Call call = Call.ringing(1L, 1L, 2L, Call.CallType.VOICE, "call-1-abc", NOW);
-
-        assertThat(call.getStatus()).isEqualTo(Call.Status.RINGING);
-        assertThat(call.getAnsweredAt()).isNull();
-        assertThat(call.getEndedAt()).isNull();
-        assertThat(call.getCallerId()).isEqualTo(1L);
-        assertThat(call.getCalleeId()).isEqualTo(2L);
-        assertThat(call.getCallType()).isEqualTo(Call.CallType.VOICE);
+    private static Call ringing() {
+        return Call.ringing(1L, 10L, 20L, Call.CallType.VOICE, "call-1-abc", T0);
     }
 
     @Test
-    void ringingRejectsSelfCall() {
-        assertThatThrownBy(() -> Call.ringing(1L, 1L, 1L, Call.CallType.VOICE, "ch", NOW))
+    void startsRinging() {
+        Call call = ringing();
+        assertThat(call.getStatus()).isEqualTo(Call.Status.RINGING);
+        assertThat(call.getStartedAt()).isEqualTo(T0);
+    }
+
+    @Test
+    void rejectsSelfCall() {
+        assertThatThrownBy(() -> Call.ringing(1L, 10L, 10L, Call.CallType.VOICE, "c", T0))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
-    void acceptTransitionsRingingToAccepted() {
-        Call call = Call.ringing(1L, 1L, 2L, Call.CallType.VOICE, "ch", NOW);
-        call.markAccepted(NOW.plusSeconds(2));
-        assertThat(call.getStatus()).isEqualTo(Call.Status.ACCEPTED);
-        assertThat(call.getAnsweredAt()).isEqualTo(NOW.plusSeconds(2));
-    }
+    void acceptThenEndByCallee() {
+        Call call = ringing();
+        call.markAccepted(T1);
+        call.markEnded(20L, T1.plusSeconds(60));
 
-    @Test
-    void rejectTransitionsRingingToRejected() {
-        Call call = Call.ringing(1L, 1L, 2L, Call.CallType.VOICE, "ch", NOW);
-        call.markRejected(NOW.plusSeconds(2));
-        assertThat(call.getStatus()).isEqualTo(Call.Status.REJECTED);
-        assertThat(call.getEndedAt()).isEqualTo(NOW.plusSeconds(2));
-        assertThat(call.getEndedBy()).isEqualTo(2L);
-        assertThat(call.getEndReason()).isEqualTo(Call.EndReason.REJECTED_BY_CALLEE.name());
-    }
-
-    @Test
-    void cancelTransitionsRingingToCancelled() {
-        Call call = Call.ringing(1L, 1L, 2L, Call.CallType.VOICE, "ch", NOW);
-        call.markCancelled(NOW.plusSeconds(2));
-        assertThat(call.getStatus()).isEqualTo(Call.Status.CANCELLED);
-        assertThat(call.getEndedBy()).isEqualTo(1L);
-    }
-
-    @Test
-    void endRequiresAcceptedState() {
-        Call call = Call.ringing(1L, 1L, 2L, Call.CallType.VOICE, "ch", NOW);
-        // Cannot end a non-ACCEPTED call.
-        assertThatThrownBy(() -> call.markEnded(1L, Call.EndReason.ENDED_BY_CALLER, NOW))
-                .isInstanceOf(IllegalStateException.class);
-    }
-
-    @Test
-    void endTransitionsAcceptedToEnded() {
-        Call call = Call.ringing(1L, 1L, 2L, Call.CallType.VOICE, "ch", NOW);
-        call.markAccepted(NOW.plusSeconds(1));
-        call.markEnded(2L, Call.EndReason.ENDED_BY_CALLEE, NOW.plusSeconds(30));
         assertThat(call.getStatus()).isEqualTo(Call.Status.ENDED);
-        assertThat(call.getEndedBy()).isEqualTo(2L);
-        assertThat(call.getEndReason()).isEqualTo(Call.EndReason.ENDED_BY_CALLEE.name());
+        assertThat(call.getAnsweredAt()).isEqualTo(T1);
+        assertThat(call.getEndedBy()).isEqualTo(20L);
+        assertThat(call.getEndReason()).isEqualTo(Call.EndReason.ENDED_BY_CALLEE);
     }
 
     @Test
-    void terminalStatesAreTerminal() {
-        assertThat(Call.Status.ENDED.isTerminal()).isTrue();
-        assertThat(Call.Status.REJECTED.isTerminal()).isTrue();
-        assertThat(Call.Status.CANCELLED.isTerminal()).isTrue();
-        assertThat(Call.Status.MISSED.isTerminal()).isTrue();
-        assertThat(Call.Status.FAILED.isTerminal()).isTrue();
-        assertThat(Call.Status.RINGING.isTerminal()).isFalse();
-        assertThat(Call.Status.ACCEPTED.isTerminal()).isFalse();
+    void endByCallerUsesCallerReason() {
+        Call call = ringing();
+        call.markAccepted(T1);
+        call.markEnded(10L, T1);
+        assertThat(call.getEndReason()).isEqualTo(Call.EndReason.ENDED_BY_CALLER);
+    }
+
+    @Test
+    void rejectCancelAndMissedRecordReasons() {
+        Call rejected = ringing();
+        rejected.markRejected(T1);
+        assertThat(rejected.getEndReason()).isEqualTo(Call.EndReason.REJECTED_BY_CALLEE);
+        assertThat(rejected.getEndedBy()).isEqualTo(20L);
+
+        Call cancelled = ringing();
+        cancelled.markCancelled(T1);
+        assertThat(cancelled.getEndReason()).isEqualTo(Call.EndReason.CANCELLED_BY_CALLER);
+        assertThat(cancelled.getEndedBy()).isEqualTo(10L);
+
+        Call missed = ringing();
+        missed.markMissed(T1);
+        assertThat(missed.getStatus()).isEqualTo(Call.Status.MISSED);
+        assertThat(missed.getEndedBy()).isNull();
+    }
+
+    @Test
+    void terminalStatesCannotTransition() {
+        Call call = ringing();
+        call.markRejected(T1);
+
+        assertThatThrownBy(() -> call.markAccepted(T1)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> call.markCancelled(T1)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> call.markEnded(10L, T1)).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void endRequiresAccepted() {
+        assertThatThrownBy(() -> ringing().markEnded(10L, T1)).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void failedIsIgnoredOnceTerminal() {
+        Call call = ringing();
+        call.markCancelled(T1);
+        call.markFailed(T1.plusSeconds(1));
+        assertThat(call.getStatus()).isEqualTo(Call.Status.CANCELLED);
     }
 }

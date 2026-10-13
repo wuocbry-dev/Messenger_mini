@@ -4,9 +4,9 @@ import com.team503.messenger.call.entity.Call;
 import java.time.LocalDateTime;
 
 /**
- * Realtime call event published to
- * {@code /user/{username}/queue/calls}. Used to signal incoming calls and
- * notify the other party of state transitions.
+ * Realtime call event published to the {@code /user/queue/calls} user
+ * destination. Signals incoming calls and state transitions to the two
+ * participants only.
  */
 public record CallEvent(
         String type,
@@ -28,30 +28,11 @@ public record CallEvent(
         ACCEPTED,
         REJECTED,
         CANCELLED,
+        MISSED,
         ENDED
     }
 
-    public static CallEvent incoming(Call call) {
-        return build(EventType.INCOMING, call);
-    }
-
-    public static CallEvent accepted(Call call) {
-        return build(EventType.ACCEPTED, call);
-    }
-
-    public static CallEvent rejected(Call call) {
-        return build(EventType.REJECTED, call);
-    }
-
-    public static CallEvent cancelled(Call call) {
-        return build(EventType.CANCELLED, call);
-    }
-
-    public static CallEvent ended(Call call) {
-        return build(EventType.ENDED, call);
-    }
-
-    private static CallEvent build(EventType type, Call call) {
+    public static CallEvent of(EventType type, Call call) {
         return new CallEvent(
                 type.name(),
                 call.getId(),
@@ -64,7 +45,7 @@ public record CallEvent(
                 call.getStartedAt(),
                 call.getAnsweredAt(),
                 call.getEndedAt(),
-                call.getEndReason()
+                call.getEndReason() == null ? null : call.getEndReason().name()
         );
     }
 }

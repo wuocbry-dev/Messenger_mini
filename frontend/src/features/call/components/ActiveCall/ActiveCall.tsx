@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Avatar } from '../../../../shared/components/ui';
-import { useAgora } from '../../../call/hooks';
+import type { AgoraState } from '../../hooks/useAgora';
 import './ActiveCall.css';
 
 interface ActiveCallProps {
-  callId: number;
-  channelName: string;
   peerName: string;
   peerAvatar?: string;
-  isInitiator: boolean;
-  startedAt: number;
+  /** Epoch ms when the peer's audio connected; null while ringing/connecting. */
+  connectedAt: number | null;
+  ringing: boolean;
+  state: AgoraState;
+  onToggleMute: () => void;
   onEnd: () => void;
 }
 
@@ -20,31 +21,37 @@ function formatDuration(ms: number): string {
   return `${min}:${sec.toString().padStart(2, '0')}`;
 }
 
-export function ActiveCall({ peerName, peerAvatar, isInitiator, startedAt, onEnd }: ActiveCallProps) {
-  const { state, toggleMute, leave } = useAgora();
+export function ActiveCall({
+  peerName,
+  peerAvatar,
+  connectedAt,
+  ringing,
+  state,
+  onToggleMute,
+  onEnd,
+}: ActiveCallProps) {
   const [elapsed, setElapsed] = useState(0);
 
-  // Update duration every second when connected
   useEffect(() => {
-    if (state.phase !== 'joined' || !state.remoteJoined) return;
-    const interval = setInterval(() => {
-      setElapsed(Date.now() - startedAt);
-    }, 1000);
+    if (!state.remoteJoined || connectedAt === null) {
+      setElapsed(0);
+      return;
+    }
+    const tick = () => setElapsed(Date.now() - connectedAt);
+    tick();
+    const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [state.phase, state.remoteJoined, startedAt]);
+  }, [state.remoteJoined, connectedAt]);
 
-  const handleEnd = async () => {
-    await leave();
-    onEnd();
-  };
+  const handleEnd = onEnd;
+  const toggleMute = onToggleMute;
 
   const phaseLabel =
-    state.phase === 'idle' ? 'Connecting...' :
+    state.phase === 'error' ? `Error: ${state.error}` :
     state.phase === 'requesting' ? 'Requesting microphone...' :
     state.phase === 'joining' ? 'Joining channel...' :
-    state.phase === 'joined' && state.remoteJoined ? formatDuration(elapsed) :
-    state.phase === 'joined' ? 'Waiting for peer...' :
-    state.phase === 'error' ? `Error: ${state.error}` :
+    state.remoteJoined ? formatDuration(elapsed) :
+    ringing ? 'Ringing...' :
     'Connecting...';
 
   return (

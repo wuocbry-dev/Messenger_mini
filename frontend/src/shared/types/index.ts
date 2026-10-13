@@ -110,7 +110,7 @@ export interface PresenceUpdate {
 }
 
 export interface CallEvent {
-  type: 'INCOMING' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED' | 'ENDED';
+  type: 'INCOMING' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED' | 'MISSED' | 'ENDED';
   callId: number;
   conversationId: number;
   callerId: number;
@@ -129,6 +129,8 @@ export interface CallTokenResponse {
   agoraChannelName: string;
   token: string;
   appId: string;
+  /** Numeric Agora uid the token is bound to (the user's id). */
+  uid: number;
   expiresInSeconds: number;
 }
 

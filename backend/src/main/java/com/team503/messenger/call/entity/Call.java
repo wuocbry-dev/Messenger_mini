@@ -2,12 +2,18 @@ package com.team503.messenger.call.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 
+/**
+ * A 1-to-1 call. Holds business state and history only; it never stores
+ * Agora tokens or the App Certificate.
+ */
 @Entity
 @Table(name = "calls")
 public class Call {
@@ -27,11 +33,7 @@ public class Call {
         FAILED;
 
         public boolean isTerminal() {
-            return this == REJECTED
-                    || this == MISSED
-                    || this == CANCELLED
-                    || this == ENDED
-                    || this == FAILED;
+            return this != RINGING && this != ACCEPTED;
         }
     }
 
@@ -58,11 +60,13 @@ public class Call {
     @Column(name = "callee_id", nullable = false, columnDefinition = "BIGINT UNSIGNED")
     private Long calleeId;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "call_type", nullable = false, length = 20)
-    private String callType;
+    private CallType callType;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
-    private String status;
+    private Status status;
 
     @Column(name = "agora_channel_name", nullable = false, length = 128)
     private String agoraChannelName;
@@ -79,102 +83,80 @@ public class Call {
     @Column(name = "ended_by", columnDefinition = "BIGINT UNSIGNED")
     private Long endedBy;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "end_reason", length = 50)
-    private String endReason;
+    private EndReason endReason;
 
     protected Call() {
     }
 
-    private Call(
-            Long conversationId,
-            Long callerId,
-            Long calleeId,
-            String callType,
-            String agoraChannelName,
-            LocalDateTime startedAt
-    ) {
+    private Call(Long conversationId, Long callerId, Long calleeId, CallType callType,
+                 String agoraChannelName, LocalDateTime startedAt) {
         this.conversationId = conversationId;
         this.callerId = callerId;
         this.calleeId = calleeId;
         this.callType = callType;
-        this.status = Status.RINGING.name();
+        this.status = Status.RINGING;
         this.agoraChannelName = agoraChannelName;
         this.startedAt = startedAt;
     }
 
-    public static Call ringing(
-            Long conversationId,
-            Long callerId,
-            Long calleeId,
-            CallType type,
-            String agoraChannelName,
-            LocalDateTime now
-    ) {
+    public static Call ringing(Long conversationId, Long callerId, Long calleeId, CallType type,
+                               String agoraChannelName, LocalDateTime now) {
         if (callerId.equals(calleeId)) {
             throw new IllegalArgumentException("Caller and callee must be different users");
         }
-        return new Call(
-                conversationId,
-                callerId,
-                calleeId,
-                type.name(),
-                agoraChannelName,
-                now
-        );
+        return new Call(conversationId, callerId, calleeId, type, agoraChannelName, now);
     }
 
     public void markAccepted(LocalDateTime now) {
-        requireStatus(Status.RINGING);
-        this.status = Status.ACCEPTED.name();
+        require(Status.RINGING);
+        this.status = Status.ACCEPTED;
         this.answeredAt = now;
     }
 
     public void markRejected(LocalDateTime now) {
-        requireStatus(Status.RINGING);
-        this.status = Status.REJECTED.name();
-        this.endedAt = now;
-        this.endedBy = calleeId;
-        this.endReason = EndReason.REJECTED_BY_CALLEE.name();
+        require(Status.RINGING);
+        finish(Status.REJECTED, calleeId, EndReason.REJECTED_BY_CALLEE, now);
     }
 
     public void markCancelled(LocalDateTime now) {
-        requireStatus(Status.RINGING);
-        this.status = Status.CANCELLED.name();
-        this.endedAt = now;
-        this.endedBy = callerId;
-        this.endReason = EndReason.CANCELLED_BY_CALLER.name();
-    }
-
-    public void markEnded(Long actorId, EndReason reason, LocalDateTime now) {
-        requireStatus(Status.ACCEPTED);
-        this.status = Status.ENDED.name();
-        this.endedAt = now;
-        this.endedBy = actorId;
-        this.endReason = reason.name();
+        require(Status.RINGING);
+        finish(Status.CANCELLED, callerId, EndReason.CANCELLED_BY_CALLER, now);
     }
 
     public void markMissed(LocalDateTime now) {
-        requireStatus(Status.RINGING);
-        this.status = Status.MISSED.name();
-        this.endedAt = now;
-        this.endReason = EndReason.MISSED_TIMEOUT.name();
+        require(Status.RINGING);
+        finish(Status.MISSED, null, EndReason.MISSED_TIMEOUT, now);
     }
 
-    public void markFailed(LocalDateTime now, String reason) {
-        // Failed can be reached from any non-terminal state.
-        if (Status.valueOf(status).isTerminal()) {
+    public void markEnded(Long actorId, LocalDateTime now) {
+        require(Status.ACCEPTED);
+        EndReason reason = callerId.equals(actorId) ? EndReason.ENDED_BY_CALLER : EndReason.ENDED_BY_CALLEE;
+        finish(Status.ENDED, actorId, reason, now);
+    }
+
+    public void markFailed(LocalDateTime now) {
+        if (status.isTerminal()) {
             return;
         }
-        this.status = Status.FAILED.name();
-        this.endedAt = now;
-        this.endReason = reason != null ? reason : EndReason.FAILED_NETWORK.name();
+        finish(Status.FAILED, null, EndReason.FAILED_NETWORK, now);
     }
 
-    private void requireStatus(Status expected) {
-        if (Status.valueOf(status) != expected) {
-            throw new IllegalStateException(
-                    "Call is in status " + status + " but expected " + expected
-            );
+    public boolean isParticipant(Long userId) {
+        return callerId.equals(userId) || calleeId.equals(userId);
+    }
+
+    private void finish(Status newStatus, Long actor, EndReason reason, LocalDateTime now) {
+        this.status = newStatus;
+        this.endedAt = now;
+        this.endedBy = actor;
+        this.endReason = reason;
+    }
+
+    private void require(Status expected) {
+        if (status != expected) {
+            throw new IllegalStateException("Call is " + status + " but expected " + expected);
         }
     }
 
@@ -195,14 +177,10 @@ public class Call {
     }
 
     public CallType getCallType() {
-        return CallType.valueOf(callType);
+        return callType;
     }
 
     public Status getStatus() {
-        return Status.valueOf(status);
-    }
-
-    public String getRawStatus() {
         return status;
     }
 
@@ -226,7 +204,7 @@ public class Call {
         return endedBy;
     }
 
-    public String getEndReason() {
+    public EndReason getEndReason() {
         return endReason;
     }
 }

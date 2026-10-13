@@ -52,7 +52,7 @@ The call state machine lives in `Call` (entity) and `CallService`.
 | `REJECTED` | `RINGING` | `POST /api/v1/calls/{id}/reject` (callee) |
 | `CANCELLED` | `RINGING` | `POST /api/v1/calls/{id}/cancel` (caller) |
 | `ENDED`    | `ACCEPTED` | `POST /api/v1/calls/{id}/end` (caller or callee) |
-| `MISSED`   | `RINGING` | scheduled timeout (out of scope for this task) |
+| `MISSED`   | `RINGING` | `CallTimeoutScheduler` after `app.agora.ring-timeout-seconds` (default 45) |
 | `FAILED`   | any non-terminal | internal error path |
 
 `REJECTED`, `MISSED`, `CANCELLED`, `ENDED`, `FAILED` are terminal. The
@@ -78,13 +78,20 @@ service rejects any state transition out of a terminal state.
 {
   "callId": 42,
   "agoraChannelName": "call-1-abc123def456",
-  "token": "<short-lived JWT-style token>",
+  "token": "<Agora AccessToken2, prefix 007>",
   "appId": "<public Agora App ID>",
+  "uid": 7,
   "expiresInSeconds": 600
 }
 ```
 
 The App Certificate is never returned; the App ID is public.
+
+Tokens are built in-process by `DefaultAgoraTokenService` in the Agora
+AccessToken2 ("007") format (RTC service, join + publish-audio privileges).
+The client must join with the numeric user id as `uid`, because the token is
+bound to that uid and the channel name. The earlier hand-rolled JWT-style
+token was not valid for Agora and was replaced.
 
 ## Realtime signaling (STOMP)
 
@@ -109,7 +116,7 @@ The App Certificate is never returned; the App ID is public.
 }
 ```
 
-`type` is one of `INCOMING`, `ACCEPTED`, `REJECTED`, `CANCELLED`, `ENDED`.
+`type` is one of `INCOMING`, `ACCEPTED`, `REJECTED`, `CANCELLED`, `MISSED`, `ENDED`. Events are published after the DB transaction commits. The caller also receives `INCOMING` (multi-device sync) and must not ring itself.
 
 ## Authorization rules
 
@@ -121,8 +128,9 @@ The App Certificate is never returned; the App ID is public.
   participants may end.
 - A conversation can have at most one active (`RINGING` or `ACCEPTED`) call
   at a time.
-- Token issuance is restricted to call participants; the call must be
-  `RINGING` or `ACCEPTED`.
+- Token issuance is restricted to participants. The caller may get a token while
+  `RINGING` or `ACCEPTED`; the callee only once `ACCEPTED`.
+- A user can be in at most one `RINGING`/`ACCEPTED` call (`CALLER_BUSY`/`CALLEE_BUSY`).
 
 ## Backend environment variables
 
@@ -130,6 +138,7 @@ The App Certificate is never returned; the App ID is public.
 AGORA_APP_ID
 AGORA_APP_CERTIFICATE   # backend-only, never exposed
 AGORA_TOKEN_TTL_SECONDS (default 600)
+AGORA_RING_TIMEOUT_SECONDS (default 45)
 ```
 
 ## Channel name policy
@@ -152,10 +161,6 @@ AGORA_TOKEN_TTL_SECONDS (default 600)
 
 ## Out of scope for task 009
 
-- Missed-call timeout: transitioning `RINGING` calls to `MISSED` after N
-  seconds. The `missed` status and the `markMissed` method exist on the
-  entity, but a scheduled job to drive the transition is left for a later
-  task.
 - Call history retention policy.
 - Video call. The `CallType.VIDEO` enum value exists for future
   compatibility; the `startCall` flow currently only allows `VOICE`.

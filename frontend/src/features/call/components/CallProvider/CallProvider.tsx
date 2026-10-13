@@ -59,7 +59,7 @@ export function CallProvider({ currentUserId, getUserName, getUserAvatar, onErro
   const [incomingCall, setIncomingCall] = useState<CallEvent | null>(null);
   const [activeCall, setActiveCall] = useState<ActiveCallInfo | null>(null);
   const [outgoing, setOutgoing] = useState(false);
-  const { state: agoraState, join, leave } = useAgora();
+  const { state: agoraState, join, leave, toggleMute } = useAgora();
   const incomingCallRef = useRef<CallEvent | null>(null);
   incomingCallRef.current = incomingCall;
   const activeCallRef = useRef<ActiveCallInfo | null>(null);
@@ -89,7 +89,7 @@ export function CallProvider({ currentUserId, getUserName, getUserAvatar, onErro
         });
         setOutgoing(true);
         const token = await callApi.getToken(call.id);
-        await join(token.appId, token.agoraChannelName, currentUserId, token.token);
+        await join(token.appId, token.agoraChannelName, token.uid, token.token);
       } catch (err) {
         handleError(err);
         setActiveCall(null);
@@ -123,17 +123,26 @@ export function CallProvider({ currentUserId, getUserName, getUserAvatar, onErro
 
   const endActiveCall = useCallback(async () => {
     const call = activeCallRef.current;
+    const ringing = outgoingRef.current;
+    setActiveCall(null);
+    setOutgoing(false);
     if (call) {
       try {
-        await callApi.end(call.id);
+        // Caller still ringing -> cancel; otherwise the call was accepted -> end.
+        await (ringing ? callApi.cancel(call.id) : callApi.end(call.id));
       } catch (err) {
         handleError(err);
       }
     }
     await leave();
-    setActiveCall(null);
-    setOutgoing(false);
   }, [leave, handleError]);
+
+  // Start the duration clock when the peer's audio first connects.
+  const [connectedAt, setConnectedAt] = useState<number | null>(null);
+  useEffect(() => {
+    if (!activeCall) setConnectedAt(null);
+    else if (agoraState.remoteJoined) setConnectedAt((prev) => prev ?? Date.now());
+  }, [activeCall, agoraState.remoteJoined]);
 
   // Bridge: subscribe to STOMP call events and update call state.
   useEffect(() => {
@@ -142,7 +151,8 @@ export function CallProvider({ currentUserId, getUserName, getUserAvatar, onErro
       if (!event?.type) return;
       switch (event.type) {
         case 'INCOMING':
-          if (!activeCallRef.current) {
+          // The caller also receives INCOMING (multi-device sync); never ring ourselves.
+          if (event.callerId !== currentUserId && !activeCallRef.current) {
             setIncomingCall(event);
           }
           break;
@@ -162,15 +172,29 @@ export function CallProvider({ currentUserId, getUserName, getUserAvatar, onErro
             callApi
               .getToken(event.callId)
               .then((token) =>
-                join(token.appId, token.agoraChannelName, currentUserId, token.token)
+                join(token.appId, token.agoraChannelName, token.uid, token.token)
               )
               .catch(handleError);
           }
           break;
         case 'REJECTED':
-        case 'CANCELLED':
           setOutgoing(false);
           setActiveCall(null);
+          void leave();
+          break;
+        case 'CANCELLED':
+          // Callee side: caller hung up before answering.
+          setIncomingCall((cur) => (cur?.callId === event.callId ? null : cur));
+          break;
+        case 'MISSED':
+          // Ring timeout: callee's prompt closes, caller's outgoing call ends.
+          setIncomingCall((cur) => (cur?.callId === event.callId ? null : cur));
+          if (activeCallRef.current?.id === event.callId) {
+            setOutgoing(false);
+            setActiveCall(null);
+            void leave();
+            onError?.('No answer');
+          }
           break;
         case 'ENDED':
           setActiveCall(null);
@@ -181,7 +205,7 @@ export function CallProvider({ currentUserId, getUserName, getUserAvatar, onErro
     };
     document.addEventListener(CALL_EVENT_NAME, handler);
     return () => document.removeEventListener(CALL_EVENT_NAME, handler);
-  }, [currentUserId, join, leave, getUserName, getUserAvatar, handleError]);
+  }, [currentUserId, join, leave, getUserName, getUserAvatar, handleError, onError]);
 
   return (
     <CallContext.Provider
@@ -199,12 +223,12 @@ export function CallProvider({ currentUserId, getUserName, getUserAvatar, onErro
 
       {activeCall && (
         <ActiveCall
-          callId={activeCall.id}
-          channelName={activeCall.channelName}
           peerName={activeCall.peerName}
           peerAvatar={activeCall.peerAvatar}
-          isInitiator={activeCall.isInitiator}
-          startedAt={activeCall.startedAt}
+          connectedAt={connectedAt}
+          ringing={outgoing}
+          state={agoraState}
+          onToggleMute={() => void toggleMute()}
           onEnd={() => void endActiveCall()}
         />
       )}

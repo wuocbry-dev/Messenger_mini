@@ -5,6 +5,7 @@ public record CallTokenResponse(
         String agoraChannelName,
         String token,
         String appId,
+        Long uid,
         int expiresInSeconds
 ) {
 }

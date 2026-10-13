@@ -1,17 +1,11 @@
 /**
- * useAgora — manages the Agora RTC Web SDK lifecycle for voice calls.
+ * useAgora — manages the Agora RTC Web SDK lifecycle for 1-to-1 voice calls.
  *
- * Responsibilities:
- * - Request microphone permission
- * - Join / leave channel
- * - Publish local audio (mute/unmute)
- * - Subscribe to remote audio
- * - Cleanup on unmount
- *
- * The call token is fetched from the backend; this hook does not generate tokens.
+ * The token and App ID come from the backend; the uid must be the numeric
+ * user id the token was issued for.
  */
 import { useRef, useState, useCallback, useEffect } from 'react';
-import type { IAgoraRTCClient, ILocalAudioTrack, IMicrophoneAudioTrack } from 'agora-rtc-sdk-ng';
+import type { IAgoraRTCClient, IMicrophoneAudioTrack } from 'agora-rtc-sdk-ng';
 
 export interface AgoraState {
   phase: 'idle' | 'requesting' | 'joining' | 'joined' | 'ended' | 'error';
@@ -20,121 +14,93 @@ export interface AgoraState {
   error?: string;
 }
 
-export function useAgora() {
-  const [state, setState] = useState<AgoraState>({
-    phase: 'idle',
-    localMuted: false,
-    remoteJoined: false,
-  });
-  const clientRef = useRef<IAgoraRTCClient | null>(null);
-  const localTrackRef = useRef<ILocalAudioTrack | null>(null);
-  const joinedRef = useRef(false);
+const INITIAL: AgoraState = { phase: 'idle', localMuted: false, remoteJoined: false };
 
-  const setPhase = useCallback((phase: AgoraState['phase'], error?: string) => {
-    setState(prev => ({ ...prev, phase, error }));
+export function useAgora() {
+  const [state, setState] = useState<AgoraState>(INITIAL);
+  const clientRef = useRef<IAgoraRTCClient | null>(null);
+  const trackRef = useRef<IMicrophoneAudioTrack | null>(null);
+  const busyRef = useRef(false);
+
+  const teardown = useCallback(async () => {
+    const track = trackRef.current;
+    const client = clientRef.current;
+    trackRef.current = null;
+    clientRef.current = null;
+    busyRef.current = false;
+    if (track) {
+      track.stop();
+      track.close();
+    }
+    if (client) {
+      client.removeAllListeners();
+      try {
+        await client.leave();
+      } catch {
+        /* already left */
+      }
+    }
   }, []);
 
-  /**
-   * Join an Agora channel. `token` and `appId` come from the backend.
-   */
-  const join = useCallback(async (appId: string, channelName: string, uid: number, token: string) => {
-    if (joinedRef.current) return;
+  const join = useCallback(
+    async (appId: string, channelName: string, uid: number, token: string) => {
+      if (busyRef.current) return;
+      busyRef.current = true;
+      setState({ ...INITIAL, phase: 'requesting' });
 
-    setPhase('requesting');
+      try {
+        const AgoraRTC = (await import('agora-rtc-sdk-ng')).default;
+        AgoraRTC.setLogLevel(3);
 
-    try {
-      // Dynamic import to code-split the heavy SDK
-      const AgoraRTC = (await import('agora-rtc-sdk-ng')).default;
+        const track = await AgoraRTC.createMicrophoneAudioTrack({ AEC: true, ANS: true, AGC: true });
+        trackRef.current = track;
 
-      // Create microphone track
-      const localTrack = await AgoraRTC.createMicrophoneAudioTrack({
-        AEC: true,
-        ANS: true,
-        AGC: true,
-      }) as IMicrophoneAudioTrack;
-      localTrackRef.current = localTrack;
+        const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+        clientRef.current = client;
 
-      // Create client
-      const client = AgoraRTC.createClient({
-        codec: 'vp8',
-        mode: 'rtc',
-      }) as IAgoraRTCClient;
-      clientRef.current = client;
+        client.on('user-published', async (user, mediaType) => {
+          if (mediaType !== 'audio') return;
+          await client.subscribe(user, 'audio');
+          user.audioTrack?.play();
+          setState((prev) => ({ ...prev, remoteJoined: true }));
+        });
+        client.on('user-unpublished', (_user, mediaType) => {
+          if (mediaType === 'audio') setState((prev) => ({ ...prev, remoteJoined: false }));
+        });
+        client.on('user-left', () => setState((prev) => ({ ...prev, remoteJoined: false })));
 
-      // Set up remote user events
-      client.on('user-published', async (user: { uid: number | string; hasAudio: boolean }, mediaType: string) => {
-        if (mediaType === 'audio') {
-          await client.subscribe(user as Parameters<typeof client.subscribe>[0], mediaType as Parameters<typeof client.subscribe>[1]);
-          setState(prev => ({ ...prev, remoteJoined: true }));
-        }
-      });
-
-      client.on('user-unpublished', (user: { uid: number | string; hasAudio: boolean }, mediaType: string) => {
-        if (mediaType === 'audio') {
-          setState(prev => ({ ...prev, remoteJoined: false }));
-        }
-      });
-
-      setPhase('joining');
-
-      // Join the channel
-      await client.join(appId, channelName, token, uid);
-
-      // Publish local audio
-      await client.publish(localTrack);
-
-      joinedRef.current = true;
-      setState(prev => ({ ...prev, phase: 'joined' }));
-
-    } catch (err) {
-      console.error('Agora join failed', err);
-      setPhase('error', err instanceof Error ? err.message : 'Failed to join call');
-      localTrackRef.current?.close();
-      localTrackRef.current = null;
-      clientRef.current = null;
-    }
-  }, [setPhase]);
+        setState((prev) => ({ ...prev, phase: 'joining' }));
+        await client.join(appId, channelName, token, uid);
+        await client.publish(track);
+        setState((prev) => ({ ...prev, phase: 'joined' }));
+      } catch (err) {
+        await teardown();
+        const message =
+          err instanceof Error && err.name === 'NotAllowedError'
+            ? 'Microphone permission was denied'
+            : err instanceof Error
+              ? err.message
+              : 'Failed to join call';
+        setState({ ...INITIAL, phase: 'error', error: message });
+      }
+    },
+    [teardown]
+  );
 
   const leave = useCallback(async () => {
-    const localTrack = localTrackRef.current;
-    const client = clientRef.current;
-
-    if (localTrack) {
-      localTrack.stop();
-      localTrack.close();
-      localTrackRef.current = null;
-    }
-
-    if (client) {
-      try { await client.leave(); } catch { /* ignore */ }
-      clientRef.current = null;
-    }
-
-    joinedRef.current = false;
-    setState({ phase: 'ended', localMuted: false, remoteJoined: false });
-  }, []);
+    await teardown();
+    setState({ ...INITIAL, phase: 'ended' });
+  }, [teardown]);
 
   const toggleMute = useCallback(async () => {
-    const track = localTrackRef.current;
+    const track = trackRef.current;
     if (!track) return;
-    const muted = !state.localMuted;
-    if (muted) {
-      (track as IMicrophoneAudioTrack).setEnabled(false);
-    } else {
-      (track as IMicrophoneAudioTrack).setEnabled(true);
-    }
-    setState(prev => ({ ...prev, localMuted: muted }));
-  }, [state.localMuted]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      localTrackRef.current?.stop();
-      localTrackRef.current?.close();
-      clientRef.current?.leave().catch(() => {});
-      joinedRef.current = false;
-    };
+    const muted = !track.enabled;
+    await track.setEnabled(!muted);
+    setState((prev) => ({ ...prev, localMuted: muted }));
   }, []);
+
+  useEffect(() => () => void teardown(), [teardown]);
 
   return { state, join, leave, toggleMute };
 }
