@@ -12,6 +12,7 @@ import {
   loadAuthFromStorage,
   updateStoredUser,
 } from './features/auth/store/authStore';
+import { RealtimeProvider } from './shared/realtime/RealtimeProvider';
 import type { User } from './shared/types';
 import './shared/styles/global.css';
 
@@ -42,7 +43,11 @@ function ChatLayout() {
     return () => window.removeEventListener(AUTH_USER_UPDATED_EVENT, onUpdated);
   }, []);
 
-  return <AppLayout user={user} />;
+  return (
+    <RealtimeProvider>
+      <AppLayout user={user} />
+    </RealtimeProvider>
+  );
 }
 
 export default function App() {

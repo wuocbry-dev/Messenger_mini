@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useContext } from 'react';
 import { createPortal } from 'react-dom';
 import { SidebarSlotContext } from '../../../../app/SidebarSlot';
+import { useRealtime } from '../../../../shared/realtime/RealtimeProvider';
 import type { Conversation, Message, TypingIndicator, MessageReceipt } from '../../../../shared/types';
 import { Sidebar } from '../Sidebar';
 import { ChatHeader } from '../ChatHeader';
@@ -46,6 +47,7 @@ export function ChatPanel({
   const typingTimeout = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   const { startCall, activeCall } = useCall();
   const slot = useContext(SidebarSlotContext);
+  const { presence } = useRealtime();
   const [mediaDrawerOpen, setMediaDrawerOpen] = useState(false);
 
   // Load messages when active conversation changes
@@ -261,6 +263,7 @@ export function ChatPanel({
               conversation={activeConversation}
               currentUserId={currentUserId}
               online={otherUserId ? onlineUsers.has(otherUserId) : false}
+              lastSeenAt={otherUserId ? presence.get(otherUserId)?.lastSeenAt : undefined}
               typing={!!typingUser}
               otherUserName={otherUserName}
               otherUserAvatar={otherUserAvatar}

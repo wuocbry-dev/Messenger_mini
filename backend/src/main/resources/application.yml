@@ -46,6 +46,9 @@ app:
       bucket-name: ${R2_BUCKET_NAME:}
       presigned-ttl-seconds: ${R2_PRESIGNED_TTL_SECONDS:900}
       key-prefix: ${R2_KEY_PREFIX:messenger/}
+  presence:
+    # Seconds a user with no open connection stays online (absorbs page reloads).
+    offline-grace-seconds: ${PRESENCE_OFFLINE_GRACE_SECONDS:5}
   agora:
     app-id: ${AGORA_APP_ID:}
     app-certificate: ${AGORA_APP_CERTIFICATE:}

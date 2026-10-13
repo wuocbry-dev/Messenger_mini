@@ -18,6 +18,7 @@ declare module 'stompjs/lib/stomp.js' {
     send(destination: string, headers?: Record<string, string>, body?: string): void;
     disconnect(callback?: () => void): void;
     debug: ((message: string) => void) | null;
+    heartbeat: { outgoing: number; incoming: number };
     connected: boolean;
   }
 

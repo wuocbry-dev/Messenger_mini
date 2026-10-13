@@ -7,11 +7,18 @@ import com.team503.messenger.user.repository.UserRepository;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import jakarta.annotation.PreDestroy;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,16 +52,47 @@ public class PresenceService {
     private final ConcurrentHashMap<Long, Set<String>> sessions = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Long, LocalDateTime> lastPersistedSeen = new ConcurrentHashMap<>();
 
+    /**
+     * How long a user with no open session stays "online" before going offline.
+     * Absorbs page reloads and brief reconnects so the status does not flicker.
+     * Zero means "go offline immediately".
+     */
+    private final Duration offlineGrace;
+    private final ScheduledExecutorService scheduler =
+            Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "presence-offline");
+                t.setDaemon(true);
+                return t;
+            });
+    private final ConcurrentHashMap<Long, ScheduledFuture<?>> pendingOffline = new ConcurrentHashMap<>();
+
     public PresenceService(
             UserRepository userRepository,
             ConversationMemberRepository memberRepository,
             SimpMessagingTemplate messagingTemplate,
             Clock clock
     ) {
+        this(userRepository, memberRepository, messagingTemplate, clock, 0);
+    }
+
+    @Autowired
+    public PresenceService(
+            UserRepository userRepository,
+            ConversationMemberRepository memberRepository,
+            SimpMessagingTemplate messagingTemplate,
+            Clock clock,
+            @Value("${app.presence.offline-grace-seconds:5}") long offlineGraceSeconds
+    ) {
         this.userRepository = userRepository;
         this.memberRepository = memberRepository;
         this.messagingTemplate = messagingTemplate;
         this.clock = clock;
+        this.offlineGrace = Duration.ofSeconds(Math.max(0, offlineGraceSeconds));
+    }
+
+    @PreDestroy
+    void shutdown() {
+        scheduler.shutdownNow();
     }
 
     public boolean isOnline(Long userId) {
@@ -70,6 +108,10 @@ public class PresenceService {
     public void sessionConnected(Long userId, String sessionId) {
         if (userId == null || sessionId == null) {
             return;
+        }
+        ScheduledFuture<?> pending = pendingOffline.remove(userId);
+        if (pending != null) {
+            pending.cancel(false);
         }
         boolean[] wasOfflineHolder = new boolean[1];
         Set<String> userSessions = sessions.compute(userId, (k, v) -> {
@@ -111,11 +153,41 @@ public class PresenceService {
         }
         if (wentOffline) {
             LocalDateTime now = LocalDateTime.now(clock);
-            log.debug("User {} went offline (session={})", userId, sessionId);
-            maybePersistLastSeen(userId, now);
-            PresenceUpdate update = PresenceUpdate.offline(userId, lastPersistedSeen.getOrDefault(userId, now));
+            if (offlineGrace.isZero()) {
+                log.debug("User {} went offline (session={})", userId, sessionId);
+                maybePersistLastSeen(userId, now);
+                PresenceUpdate update = PresenceUpdate.offline(userId, now);
+                publishToSelf(userId, update);
+                publishToPeers(userId, update);
+            } else {
+                // Not reported yet: wait in case the user reconnects (reload).
+                ScheduledFuture<?> previous = pendingOffline.put(userId, scheduler.schedule(
+                        () -> finalizeOffline(userId, now), offlineGrace.toMillis(), TimeUnit.MILLISECONDS));
+                if (previous != null) {
+                    previous.cancel(false);
+                }
+            }
+        }
+    }
+
+    /** Runs after the grace period; does nothing if the user came back. */
+    void finalizeOffline(Long userId, LocalDateTime lastActive) {
+        pendingOffline.remove(userId);
+        if (isOnline(userId)) {
+            return;
+        }
+        try {
+            log.debug("User {} went offline (grace elapsed)", userId);
+            userRepository.findById(userId).ifPresent(user -> {
+                user.updateLastSeen(lastActive);
+                userRepository.save(user);
+            });
+            lastPersistedSeen.put(userId, lastActive);
+            PresenceUpdate update = PresenceUpdate.offline(userId, lastActive);
             publishToSelf(userId, update);
             publishToPeers(userId, update);
+        } catch (RuntimeException e) {
+            log.warn("Failed to publish offline presence for user {}", userId, e);
         }
     }
 

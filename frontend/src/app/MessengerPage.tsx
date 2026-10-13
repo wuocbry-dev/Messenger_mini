@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ChatPanel } from '../features/chat/components/ChatPanel';
 import { CallProvider } from '../features/call/components/CallProvider';
 import { PendingCallLauncher } from './PendingCallLauncher';
-import { useWebSocket } from '../shared/hooks/useWebSocket';
+import { useRealtime } from '../shared/realtime/RealtimeProvider';
 import { conversationApi } from '../features/chat/api/conversationApi';
 import { authApi } from '../features/auth/api/authApi';
 import { clearAuth } from '../features/auth/store/authStore';
@@ -14,7 +14,6 @@ import type {
   Message,
   TypingIndicator,
   MessageReceipt,
-  PresenceUpdate,
   CallEvent,
 } from '../shared/types';
 
@@ -36,7 +35,6 @@ export function MessengerPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [convLoading, setConvLoading] = useState(true);
   const [activeConv, setActiveConv] = useState<Conversation | null>(null);
-  const [onlineUsers, setOnlineUsers] = useState<Set<number>>(new Set());
   const [toasts, setToasts] = useState<ToastData[]>([]);
   const userMapRef = useRef<
     Map<number, { displayName: string; username?: string; avatarUrl?: string }>
@@ -198,17 +196,6 @@ export function MessengerPage() {
     // Receipt updates are routed by ChatPanel
   }, []);
 
-  const handlePresence = useCallback((payload: unknown) => {
-    const p = payload as PresenceUpdate;
-    if (p?.userId == null) return;
-    setOnlineUsers((prev) => {
-      const next = new Set(prev);
-      if (p.online) next.add(p.userId);
-      else next.delete(p.userId);
-      return next;
-    });
-  }, []);
-
   const handleCallEvent = useCallback(
     (payload: unknown) => {
       const event = payload as CallEvent;
@@ -223,13 +210,32 @@ export function MessengerPage() {
     [addToast]
   );
 
-  const { send: stompSend, status: wsStatus } = useWebSocket({
-    onMessage: handleMessage,
-    onTyping: handleTypingEvent,
-    onReceipt: handleReceipt,
-    onPresence: handlePresence,
-    onCall: handleCallEvent,
-  });
+  // The connection lives in RealtimeProvider (so it stays up on every page);
+  // this page listens to the events it dispatches.
+  const { send: stompSend, status: wsStatus, presence } = useRealtime();
+
+  const onlineUsers = useMemo(() => {
+    const ids = new Set<number>();
+    presence.forEach((info, id) => {
+      if (info.online) ids.add(id);
+    });
+    return ids;
+  }, [presence]);
+
+  useEffect(() => {
+    const bind = (name: string, fn: (payload: unknown) => void) => {
+      const listener = (e: Event) => fn((e as CustomEvent).detail);
+      document.addEventListener(name, listener);
+      return () => document.removeEventListener(name, listener);
+    };
+    const unbinds = [
+      bind('chat:stomp-message', handleMessage),
+      bind('chat:stomp-typing', handleTypingEvent),
+      bind('chat:stomp-receipt', handleReceipt),
+      bind('messenger:call-event', handleCallEvent),
+    ];
+    return () => unbinds.forEach((off) => off());
+  }, [handleMessage, handleTypingEvent, handleReceipt, handleCallEvent]);
 
   const handleSelectConversation = useCallback((conv: Conversation) => {
     const normalized = normalizeConversation(conv);

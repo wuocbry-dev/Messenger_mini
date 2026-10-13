@@ -7,6 +7,8 @@ import { Alert } from '../../../shared/components/ui/Alert';
 import { userApi } from '../api/userApi';
 import { conversationApi } from '../api/conversationApi';
 import { parseUtc } from '../../../shared/utils/datetime';
+import { useRealtime } from '../../../shared/realtime/RealtimeProvider';
+import { useNow } from '../../../shared/hooks/useNow';
 import type { UserSearchResult } from '../../../shared/types';
 import './UsersPage.css';
 
@@ -48,7 +50,19 @@ function lastSeenDate(user: UserSearchResult): string {
 
 export function UsersPage() {
   const navigate = useNavigate();
-  const [users, setUsers] = useState<UserSearchResult[]>([]);
+  const [baseUsers, setUsers] = useState<UserSearchResult[]>([]);
+  const { presence } = useRealtime();
+  useNow(30_000); // re-render so "Active 5m ago" keeps counting
+
+  // Live presence events win over the last REST snapshot.
+  const users = useMemo(
+    () =>
+      baseUsers.map((u) => {
+        const live = presence.get(u.id);
+        return live ? { ...u, online: live.online, lastSeenAt: live.lastSeenAt ?? u.lastSeenAt } : u;
+      }),
+    [baseUsers, presence]
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');

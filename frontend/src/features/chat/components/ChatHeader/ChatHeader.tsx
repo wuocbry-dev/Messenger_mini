@@ -1,12 +1,16 @@
 import React from 'react';
 import type { Conversation } from '../../../../shared/types';
 import { Avatar, IconButton } from '../../../../shared/components/ui';
+import { formatLastSeen } from '../../../../shared/utils/lastSeen';
+import { useNow } from '../../../../shared/hooks/useNow';
 import './ChatHeader.css';
 
 interface ChatHeaderProps {
   conversation: Conversation;
   currentUserId: number;
   online: boolean;
+  /** Server-known last activity, shown while the peer is offline. */
+  lastSeenAt?: string;
   typing: boolean;
   onCallClick: () => void;
   onVideoCallClick?: () => void;
@@ -22,6 +26,7 @@ export function ChatHeader({
   conversation,
   currentUserId,
   online,
+  lastSeenAt,
   typing,
   onCallClick,
   onVideoCallClick,
@@ -32,6 +37,7 @@ export function ChatHeader({
   onMenuClick,
   onMediaClick,
 }: ChatHeaderProps) {
+  const now = useNow(30_000); // keeps "Active 5 minutes ago" counting
   const name = conversation.title
     ?? otherUserName
     ?? conversation.directWithUser?.displayName
@@ -57,7 +63,7 @@ export function ChatHeader({
             {typing
               ? 'typing...'
               : otherUserId != null
-              ? (online ? 'Online' : 'Offline')
+              ? (online ? 'Online' : formatLastSeen(lastSeenAt, now))
               : `${conversation.type.toLowerCase()} conversation`}
           </span>
         </div>

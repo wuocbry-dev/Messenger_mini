@@ -67,6 +67,10 @@ export function useWebSocket(handlers: WsHandlers) {
       // The backend exposes a native WebSocket STOMP endpoint (no SockJS).
       const client = Stomp.client(WS_URL);
       client.debug = null;
+      // Match the server heartbeat so a dead connection is noticed (and
+      // presence updated) within about 20 seconds.
+      client.heartbeat.outgoing = 10_000;
+      client.heartbeat.incoming = 10_000;
       clientRef.current = client;
 
       const safeParse = (frame: { body: string }): unknown => {
@@ -128,7 +132,7 @@ export function useWebSocket(handlers: WsHandlers) {
           setStatus('error');
           reconnectTimer.current = setTimeout(() => {
             void connect();
-          }, 3000);
+          }, 1500);
         }
       );
     } catch (err) {
@@ -139,6 +143,21 @@ export function useWebSocket(handlers: WsHandlers) {
       }, 5000);
     }
   }, []);
+
+  // Reconnect right away when the network returns or the tab becomes visible
+  // again, instead of waiting for the retry timer.
+  useEffect(() => {
+    const revive = () => {
+      if (document.visibilityState === 'hidden') return;
+      if (!clientRef.current?.connected) void connect();
+    };
+    window.addEventListener('online', revive);
+    document.addEventListener('visibilitychange', revive);
+    return () => {
+      window.removeEventListener('online', revive);
+      document.removeEventListener('visibilitychange', revive);
+    };
+  }, [connect]);
 
   useEffect(() => {
     void connect();
