@@ -68,7 +68,6 @@ export function ChatHeader({
               otherUserId != null && online && !typing ? ' chat-header-status--online' : ''
             }`}
           >
-            {otherUserId != null && !isGroup && !typing && <span className="chat-header-status-dot" aria-hidden="true" />}
             {typing
               ? 'typing...'
               : isGroup

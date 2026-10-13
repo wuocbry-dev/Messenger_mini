@@ -54,8 +54,9 @@ export function Avatar({ src, name, size = 'md', online, className = '' }: Avata
           {initials}
         </span>
       )}
-      {online !== undefined && (
-        <span className={`avatar-status ${online ? 'avatar-status--online' : 'avatar-status--offline'}`} />
+      {/* Only an online person gets a dot; offline shows nothing. */}
+      {online === true && (
+        <span className="avatar-status avatar-status--online" />
       )}
     </div>
   );
