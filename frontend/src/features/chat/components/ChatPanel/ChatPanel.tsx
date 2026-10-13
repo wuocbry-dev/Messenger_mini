@@ -8,7 +8,8 @@ import { ChatHeader } from '../ChatHeader';
 import { MessageList } from '../MessageList';
 import { MessageInput } from '../MessageInput';
 import { SharedMediaDrawer } from '../SharedMediaDrawer';
-import { EmptyState } from '../../../../shared/components/ui';
+import { WelcomeShowcase } from '../WelcomeShowcase';
+import { NewConversationModal } from '../NewConversationModal';
 import { messageApi } from '../../api';
 import { useCall } from '../../../call/components/CallProvider';
 import './ChatPanel.css';
@@ -49,6 +50,7 @@ export function ChatPanel({
   const slot = useContext(SidebarSlotContext);
   const { presence } = useRealtime();
   const [mediaDrawerOpen, setMediaDrawerOpen] = useState(false);
+  const [showNewConv, setShowNewConv] = useState(false);
 
   // Load messages when active conversation changes
   useEffect(() => {
@@ -298,27 +300,20 @@ export function ChatPanel({
           </>
         ) : (
           <div className="chat-empty">
-            <EmptyState
-              icon={
-                <svg
-                  width="48"
-                  height="48"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                </svg>
-              }
-              title="Welcome to Messenger Mini"
-              description="Pick a conversation from the list, or start a new one to begin chatting"
-            />
+            <WelcomeShowcase onStartChat={() => setShowNewConv(true)} />
           </div>
         )}
       </main>
+
+      <NewConversationModal
+        open={showNewConv}
+        onClose={() => setShowNewConv(false)}
+        onCreated={(conv) => {
+          setShowNewConv(false);
+          onRefreshConversations();
+          onSelectConversation(conv as unknown as Conversation);
+        }}
+      />
     </div>
   );
 }
