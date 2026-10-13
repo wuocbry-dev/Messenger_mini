@@ -1,16 +1,17 @@
+/* Sidebar - Conversation list matching reference design */
+
 .sidebar {
-  width: var(--sidebar-width);
+  width: var(--conv-panel-width);
   height: 100%;
   background: var(--color-surface);
   border-right: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  overflow: hidden;
 }
 
 /* Mobile: sidebar becomes a drawer overlay */
-@media (max-width: 640px) {
+@media (max-width: 768px) {
   .sidebar {
     position: fixed;
     top: 0;
@@ -36,19 +37,19 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-4);
-  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-4) var(--space-4);
+  border-bottom: 1px solid var(--color-border-light);
   flex-shrink: 0;
 }
 
 .sidebar-title {
-  font-size: var(--font-size-xl);
+  font-size: var(--font-size-lg);
   font-weight: var(--font-weight-bold);
   color: var(--color-text-primary);
 }
 
 .sidebar-search {
-  padding: var(--space-3) var(--space-3);
+  padding: var(--space-3) var(--space-4);
   flex-shrink: 0;
 }
 
@@ -67,14 +68,14 @@
 
 .search-input {
   width: 100%;
-  height: 36px;
+  height: 40px;
   padding: 0 var(--space-3) 0 calc(var(--space-3) + 20px);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface-alt);
+  border-radius: var(--radius-xl);
+  background: var(--color-bg);
   font-size: var(--font-size-sm);
   color: var(--color-text-primary);
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
 }
 
 .search-input::placeholder { color: var(--color-text-muted); }
@@ -82,7 +83,7 @@
   outline: none;
   border-color: var(--color-primary);
   background: var(--color-surface);
-  box-shadow: 0 0 0 3px var(--color-primary-alpha);
+  box-shadow: 0 0 0 4px var(--color-primary-alpha);
 }
 
 .conversation-list {
@@ -99,10 +100,12 @@
   cursor: pointer;
   transition: background var(--transition-fast);
   border-left: 3px solid transparent;
+  margin: 0 var(--space-2);
+  border-radius: var(--radius-xl);
 }
 
 .conversation-item:hover {
-  background: var(--color-surface-alt);
+  background: var(--color-bg);
 }
 
 .conversation-item--active {
@@ -115,6 +118,7 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
+  margin: 0 var(--space-2);
 }
 
 .conversation-item-skeleton-text {
@@ -165,7 +169,6 @@
   font-weight: var(--font-weight-medium);
   cursor: pointer;
   padding: 0;
-  text-decoration: underline;
 }
 
 .sidebar-overlay {

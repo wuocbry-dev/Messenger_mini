@@ -1,10 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AppLayout } from './AppLayout';
 import { ChatPanel } from '../features/chat/components/ChatPanel';
-import {
-  CallProvider,
-} from '../features/call/components/CallProvider';
+import { CallProvider } from '../features/call/components/CallProvider';
 import { useWebSocket } from '../shared/hooks/useWebSocket';
 import { conversationApi } from '../features/chat/api/conversationApi';
 import { authApi } from '../features/auth/api/authApi';
@@ -161,8 +158,7 @@ export function MessengerPage() {
   }, []);
 
   const handleReceipt = useCallback((_payload: unknown) => {
-    // Receipt updates are routed by ChatPanel; we just need to know
-    // the event is alive. Future: track unread counts here.
+    // Receipt updates are routed by ChatPanel
   }, []);
 
   const handlePresence = useCallback((payload: unknown) => {
@@ -183,14 +179,14 @@ export function MessengerPage() {
         addToast('info', 'Call was declined');
       } else if (event?.type === 'CANCELLED') {
         addToast('info', 'Call was cancelled');
-      } else       if (event?.type === 'ENDED') {
+      } else if (event?.type === 'ENDED') {
         addToast('info', 'Call ended');
       }
     },
     [addToast]
   );
 
-  const { send: stompSend, status: wsStatus, reconnect } = useWebSocket({
+  const { send: stompSend, status: wsStatus } = useWebSocket({
     onMessage: handleMessage,
     onTyping: handleTypingEvent,
     onReceipt: handleReceipt,
@@ -239,23 +235,21 @@ export function MessengerPage() {
       getUserAvatar={getUserAvatar}
       onError={(msg) => addToast('error', msg)}
     >
-      <AppLayout user={user}>
-        <div className="messenger-content">
-          <ChatPanel
-            conversations={conversations}
-            conversationsLoading={convLoading}
-            activeConversation={activeConv}
-            currentUserId={user.id}
-            onlineUsers={onlineUsers}
-            onSelectConversation={handleSelectConversation}
-            onRefreshConversations={loadConversations}
-            stompSend={stompSend}
-            getUserName={getUserName}
-            getUserAvatar={getUserAvatar}
-            onError={(message) => addToast('error', message)}
-          />
-        </div>
-      </AppLayout>
+      <div className="messenger-page">
+        <ChatPanel
+          conversations={conversations}
+          conversationsLoading={convLoading}
+          activeConversation={activeConv}
+          currentUserId={user.id}
+          onlineUsers={onlineUsers}
+          onSelectConversation={handleSelectConversation}
+          onRefreshConversations={loadConversations}
+          stompSend={stompSend}
+          getUserName={getUserName}
+          getUserAvatar={getUserAvatar}
+          onError={(message) => addToast('error', message)}
+        />
+      </div>
       <ToastContainer toasts={toasts} onRemove={removeToast} />
     </CallProvider>
   );

@@ -29,4 +29,15 @@ public interface UserRepository extends JpaRepository<User, Long> {
             LIMIT 10
             """)
     java.util.List<User> searchActiveUsers(@Param("query") String query);
+
+    /**
+     * Get all active users except the current user.
+     */
+    @Query("""
+            SELECT u FROM User u
+            WHERE u.status = 'ACTIVE'
+            AND u.id != :currentUserId
+            ORDER BY u.displayName
+            """)
+    java.util.List<User> findAllActiveUsersExcept(@Param("currentUserId") Long currentUserId);
 }

@@ -70,4 +70,8 @@ export const messageApi = {
   getFile(fileId: number): Promise<FileResponse> {
     return api.get<FileResponse>(`/api/v1/files/${fileId}/download`);
   },
+
+  getDownloadUrl(fileId: number): Promise<FileResponse> {
+    return api.get<FileResponse>(`/api/v1/files/${fileId}/download`);
+  },
 };

@@ -18,6 +18,17 @@ export interface UserSearchResult {
   avatarObjectKey?: string;
 }
 
+export interface UserSummary {
+  id: number;
+  username: string;
+  displayName: string;
+  avatarUrl?: string;
+}
+
+export interface UserProfile extends UserSummary {
+  email?: string;
+}
+
 export interface Conversation {
   id: number;
   type: 'DIRECT' | 'GROUP';

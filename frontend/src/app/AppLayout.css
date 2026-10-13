@@ -1,36 +1,22 @@
+/* AppLayout - Main application layout */
+
 .app-layout {
   display: flex;
-  flex-direction: column;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
-.app-footer {
+.app-main {
+  flex: 1;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-2) var(--space-4);
-  background: var(--color-surface);
-  border-top: 1px solid var(--color-border);
-  flex-shrink: 0;
-  height: 52px;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--color-bg);
 }
 
-.app-footer-user {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.app-footer-name {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-primary);
-}
-
-.messenger-content {
+.messenger-page {
   flex: 1;
   display: flex;
   overflow: hidden;
-  min-height: 0;
 }

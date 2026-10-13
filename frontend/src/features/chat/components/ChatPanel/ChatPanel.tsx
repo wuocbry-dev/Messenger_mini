@@ -4,6 +4,7 @@ import { Sidebar } from '../Sidebar';
 import { ChatHeader } from '../ChatHeader';
 import { MessageList } from '../MessageList';
 import { MessageInput } from '../MessageInput';
+import { SharedMediaDrawer } from '../SharedMediaDrawer';
 import { EmptyState } from '../../../../shared/components/ui';
 import { messageApi } from '../../api';
 import { useCall } from '../../../call/components/CallProvider';
@@ -42,6 +43,7 @@ export function ChatPanel({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const typingTimeout = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   const { startCall, activeCall } = useCall();
+  const [mediaDrawerOpen, setMediaDrawerOpen] = useState(false);
 
   // Load messages when active conversation changes
   useEffect(() => {
@@ -244,6 +246,7 @@ export function ChatPanel({
               onCallClick={handleStartCall}
               callInProgress={!!activeCall}
               onMenuClick={() => setSidebarOpen(true)}
+              onMediaClick={() => setMediaDrawerOpen(true)}
             />
             <MessageList
               messages={messages}
@@ -256,6 +259,11 @@ export function ChatPanel({
               onSend={handleSend}
               onTyping={handleTypingSignal}
               onAttach={handleAttach}
+            />
+            <SharedMediaDrawer
+              conversation={activeConversation}
+              open={mediaDrawerOpen}
+              onClose={() => setMediaDrawerOpen(false)}
             />
           </>
         ) : (

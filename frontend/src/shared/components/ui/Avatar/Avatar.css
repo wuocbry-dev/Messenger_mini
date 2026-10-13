@@ -1,3 +1,5 @@
+/* Avatar - Matching reference design */
+
 .avatar {
   position: relative;
   display: inline-flex;
@@ -6,9 +8,11 @@
   overflow: visible;
 }
 
-.avatar-sm  { width: var(--avatar-size-sm);  height: var(--avatar-size-sm);  }
-.avatar-md  { width: var(--avatar-size-md);  height: var(--avatar-size-md);  }
-.avatar-lg  { width: var(--avatar-size-lg);  height: var(--avatar-size-lg);  }
+.avatar-xs { width: var(--avatar-size-xs); height: var(--avatar-size-xs); }
+.avatar-sm { width: var(--avatar-size-sm); height: var(--avatar-size-sm); }
+.avatar-md { width: var(--avatar-size-md); height: var(--avatar-size-md); }
+.avatar-lg { width: var(--avatar-size-lg); height: var(--avatar-size-lg); }
+.avatar-xl { width: var(--avatar-size-xl); height: var(--avatar-size-xl); }
 
 .avatar-img {
   width: 100%;
@@ -26,29 +30,32 @@
   border-radius: var(--radius-full);
   color: white;
   font-weight: var(--font-weight-semibold);
-  font-size: var(--font-size-xs);
 }
 
-.avatar-sm .avatar-initials  { font-size: 0.625rem; }
-.avatar-md .avatar-initials  { font-size: var(--font-size-xs); }
-.avatar-lg .avatar-initials  { font-size: var(--font-size-base); }
+.avatar-xs .avatar-initials  { font-size: 0.625rem; }
+.avatar-sm .avatar-initials  { font-size: 0.75rem; }
+.avatar-md .avatar-initials  { font-size: 1rem; }
+.avatar-lg .avatar-initials  { font-size: 1.5rem; }
+.avatar-xl .avatar-initials  { font-size: 2rem; }
 
 .avatar-status {
   position: absolute;
   bottom: 0;
   right: 0;
-  width: 10px;
-  height: 10px;
   border-radius: var(--radius-full);
   border: 2px solid var(--color-surface);
 }
 
-.avatar-sm .avatar-status  { width: 8px;  height: 8px;  }
-.avatar-lg .avatar-status  { width: 12px; height: 12px; border-width: 3px; }
+.avatar-xs .avatar-status  { width: 8px;  height: 8px;  border-width: 2px; }
+.avatar-sm .avatar-status  { width: 10px; height: 10px; border-width: 2px; }
+.avatar-md .avatar-status  { width: 12px; height: 12px; border-width: 2px; }
+.avatar-lg .avatar-status  { width: 14px; height: 14px; border-width: 3px; }
+.avatar-xl .avatar-status  { width: 16px; height: 16px; border-width: 3px; }
 
 .avatar-status--online {
   background: var(--color-online);
 }
+
 .avatar-status--offline {
   background: var(--color-offline);
 }

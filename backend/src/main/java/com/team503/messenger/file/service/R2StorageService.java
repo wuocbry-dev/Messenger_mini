@@ -46,18 +46,19 @@ public class R2StorageService implements ObjectStorageService {
 
         S3Configuration s3Config = S3Configuration.builder()
                 .pathStyleAccessEnabled(true)
+                .chunkedEncodingEnabled(false)
                 .build();
 
         this.client = S3Client.builder()
                 .endpointOverride(URI.create(properties.getEndpoint()))
-                .region(Region.US_EAST_1) // R2 requires a region; US_EAST_1 is the conventional choice.
+                .region(Region.of("auto"))
                 .credentialsProvider(StaticCredentialsProvider.create(credentials))
                 .serviceConfiguration(s3Config)
                 .build();
 
         this.presigner = S3Presigner.builder()
                 .endpointOverride(URI.create(properties.getEndpoint()))
-                .region(Region.US_EAST_1)
+                .region(Region.of("auto"))
                 .credentialsProvider(StaticCredentialsProvider.create(credentials))
                 .serviceConfiguration(s3Config)
                 .build();

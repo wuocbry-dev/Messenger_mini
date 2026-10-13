@@ -1,5 +1,8 @@
+/* ChatPanel - Main chat interface matching reference design */
+
 .chat-panel {
   display: flex;
+  flex: 1;
   height: 100%;
   overflow: hidden;
   background: var(--color-bg);
@@ -11,6 +14,7 @@
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
+  background: var(--color-surface);
 }
 
 .chat-empty {
@@ -19,4 +23,5 @@
   align-items: center;
   justify-content: center;
   background: var(--color-bg);
+  padding: var(--space-8);
 }

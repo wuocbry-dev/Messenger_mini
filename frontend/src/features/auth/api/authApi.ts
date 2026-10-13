@@ -20,6 +20,10 @@ export interface AuthResponse {
   user: User;
 }
 
+export interface UpdateProfileRequest {
+  displayName?: string;
+}
+
 export const authApi = {
   register(data: RegisterRequest): Promise<AuthResponse> {
     return api.post<AuthResponse>('/api/v1/auth/register', data);
@@ -41,6 +45,10 @@ export const authApi = {
 
   me(): Promise<User> {
     return api.get<User>('/api/v1/users/me');
+  },
+
+  updateProfile(data: UpdateProfileRequest): Promise<User> {
+    return api.patch<User>('/api/v1/users/me', data);
   },
 
   getCurrentUser(): User | null {

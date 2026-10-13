@@ -39,6 +39,14 @@ public class UserController {
     }
 
     /**
+     * Get all active users (for user directory).
+     */
+    @GetMapping
+    List<UserSearchResult> getAllUsers(@AuthenticationPrincipal AuthenticatedUser currentUser) {
+        return userService.getAllActiveUsers(currentUser.id());
+    }
+
+    /**
      * Search active users by username or display name.
      * Used by the New Conversation modal.
      */

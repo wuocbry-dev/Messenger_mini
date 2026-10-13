@@ -14,6 +14,10 @@ export const conversationApi = {
     return api.get<Conversation>(`/api/v1/conversations/${id}`);
   },
 
+  create(otherUserId: number): Promise<Conversation> {
+    return api.post<Conversation>('/api/v1/conversations/direct', { otherUserId });
+  },
+
   createDirect(data: CreateDirectRequest): Promise<Conversation> {
     return api.post<Conversation>('/api/v1/conversations/direct', data);
   },

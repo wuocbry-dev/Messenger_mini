@@ -14,6 +14,7 @@ interface ChatHeaderProps {
   otherUserId?: number;
   callInProgress?: boolean;
   onMenuClick?: () => void;
+  onMediaClick?: () => void;
 }
 
 export function ChatHeader({
@@ -27,6 +28,7 @@ export function ChatHeader({
   otherUserId,
   callInProgress,
   onMenuClick,
+  onMediaClick,
 }: ChatHeaderProps) {
   const name = conversation.title
     ?? otherUserName
@@ -54,17 +56,6 @@ export function ChatHeader({
         </div>
       </div>
       <div className="chat-header-actions">
-        <button
-          className="chat-header-menu-btn"
-          onClick={onMenuClick}
-          aria-label="Open conversations"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="3" y1="6" x2="21" y2="6" />
-            <line x1="3" y1="12" x2="21" y2="12" />
-            <line x1="3" y1="18" x2="21" y2="18" />
-          </svg>
-        </button>
         {otherUserId != null && !callInProgress && (
           <IconButton
             label="Voice call"
@@ -77,6 +68,31 @@ export function ChatHeader({
             </svg>
           </IconButton>
         )}
+        {onMediaClick && (
+          <IconButton
+            label="Shared media"
+            variant="ghost"
+            size="md"
+            onClick={onMediaClick}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <polyline points="21 15 16 10 5 21" />
+            </svg>
+          </IconButton>
+        )}
+        <button
+          className="chat-header-menu-btn"
+          onClick={onMenuClick}
+          aria-label="Open conversations"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
       </div>
     </header>
   );

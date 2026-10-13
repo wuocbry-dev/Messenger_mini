@@ -68,4 +68,15 @@ public class UserService {
                 .map(UserSearchResult::from)
                 .toList();
     }
+
+    /**
+     * Get all active users except the current user.
+     * Used by the user directory page.
+     */
+    @Transactional(readOnly = true)
+    public List<UserSearchResult> getAllActiveUsers(Long currentUserId) {
+        return userRepository.findAllActiveUsersExcept(currentUserId).stream()
+                .map(UserSearchResult::from)
+                .toList();
+    }
 }

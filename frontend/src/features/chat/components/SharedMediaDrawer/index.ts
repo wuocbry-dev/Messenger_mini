@@ -1,0 +1,1 @@
+export { SharedMediaDrawer } from './SharedMediaDrawer';
