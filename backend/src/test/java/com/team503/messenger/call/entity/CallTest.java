@@ -51,7 +51,7 @@ class CallTest {
     @Test
     void rejectCancelAndMissedRecordReasons() {
         Call rejected = ringing();
-        rejected.markRejected(T1);
+        rejected.markRejected(20L, T1);
         assertThat(rejected.getEndReason()).isEqualTo(Call.EndReason.REJECTED_BY_CALLEE);
         assertThat(rejected.getEndedBy()).isEqualTo(20L);
 
@@ -69,7 +69,7 @@ class CallTest {
     @Test
     void terminalStatesCannotTransition() {
         Call call = ringing();
-        call.markRejected(T1);
+        call.markRejected(20L, T1);
 
         assertThatThrownBy(() -> call.markAccepted(T1)).isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> call.markCancelled(T1)).isInstanceOf(IllegalStateException.class);

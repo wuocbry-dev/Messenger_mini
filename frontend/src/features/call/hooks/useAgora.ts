@@ -1,9 +1,9 @@
 /**
- * useAgora — manages the Agora RTC Web SDK lifecycle for 1-to-1 voice and
- * video calls.
+ * useAgora — manages the Agora RTC Web SDK lifecycle for voice and video
+ * calls with one or many remote people.
  *
  * The token and App ID come from the backend; the uid must be the numeric
- * user id the token was issued for.
+ * user id the token was issued for, so remote uids are user ids.
  */
 import { useRef, useState, useCallback, useEffect } from 'react';
 import type {
@@ -24,10 +24,14 @@ export interface AgoraState {
   cameraOn: boolean;
   /** Sharing the screen instead of the camera. */
   sharing: boolean;
+  /** True while at least one other person is connected to the channel. */
   remoteJoined: boolean;
+  /** User ids (uids) of the people currently connected. */
+  remoteUids: number[];
   /** The video currently published (camera or screen). */
   localVideo: ICameraVideoTrack | ILocalVideoTrack | null;
-  remoteVideo: IRemoteVideoTrack | null;
+  /** Remote video tracks by user id. */
+  remoteVideos: Record<number, IRemoteVideoTrack>;
   error?: string;
   /** Set when a video call fell back to audio only (e.g. camera denied). */
   notice?: string;
@@ -40,8 +44,9 @@ const INITIAL: AgoraState = {
   cameraOn: false,
   sharing: false,
   remoteJoined: false,
+  remoteUids: [],
   localVideo: null,
-  remoteVideo: null,
+  remoteVideos: {},
 };
 
 export function useAgora() {
@@ -50,7 +55,7 @@ export function useAgora() {
   const audioRef = useRef<IMicrophoneAudioTrack | null>(null);
   const videoRef = useRef<ICameraVideoTrack | null>(null);
   const screenRef = useRef<ILocalVideoTrack | null>(null);
-  const remoteAudioRef = useRef<IRemoteAudioTrack | null>(null);
+  const remoteAudioRef = useRef<Map<number, IRemoteAudioTrack>>(new Map());
   const speakerOnRef = useRef(true);
   const busyRef = useRef(false);
 
@@ -62,7 +67,7 @@ export function useAgora() {
     audioRef.current = null;
     videoRef.current = null;
     screenRef.current = null;
-    remoteAudioRef.current = null;
+    remoteAudioRef.current = new Map();
     speakerOnRef.current = true;
     clientRef.current = null;
     busyRef.current = false;
@@ -81,6 +86,22 @@ export function useAgora() {
       }
     }
   }, []);
+
+  const addRemoteUid = (uid: number) =>
+    setState((prev) => {
+      if (prev.remoteUids.includes(uid)) return prev;
+      const remoteUids = [...prev.remoteUids, uid];
+      return { ...prev, remoteUids, remoteJoined: true };
+    });
+
+  const removeRemoteUid = (uid: number) => {
+    remoteAudioRef.current.delete(uid);
+    setState((prev) => {
+      const remoteUids = prev.remoteUids.filter((id) => id !== uid);
+      const { [uid]: _gone, ...remoteVideos } = prev.remoteVideos;
+      return { ...prev, remoteUids, remoteJoined: remoteUids.length > 0, remoteVideos };
+    });
+  };
 
   const join = useCallback(
     async (
@@ -115,25 +136,33 @@ export function useAgora() {
         const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
         clientRef.current = client;
 
+        client.on('user-joined', (user) => addRemoteUid(Number(user.uid)));
         client.on('user-published', async (user, mediaType) => {
+          const remoteUid = Number(user.uid);
           await client.subscribe(user, mediaType);
-          if (mediaType === 'audio') {
-            remoteAudioRef.current = user.audioTrack ?? null;
-            user.audioTrack?.setVolume(speakerOnRef.current ? 100 : 0);
-            user.audioTrack?.play();
-            setState((prev) => ({ ...prev, remoteJoined: true }));
-          } else if (user.videoTrack) {
+          addRemoteUid(remoteUid);
+          if (mediaType === 'audio' && user.audioTrack) {
+            remoteAudioRef.current.set(remoteUid, user.audioTrack);
+            user.audioTrack.setVolume(speakerOnRef.current ? 100 : 0);
+            user.audioTrack.play();
+          } else if (mediaType === 'video' && user.videoTrack) {
             const remoteVideo = user.videoTrack;
-            setState((prev) => ({ ...prev, remoteJoined: true, remoteVideo }));
+            setState((prev) => ({
+              ...prev,
+              remoteVideos: { ...prev.remoteVideos, [remoteUid]: remoteVideo },
+            }));
           }
         });
-        client.on('user-unpublished', (_user, mediaType) => {
-          if (mediaType === 'audio') setState((prev) => ({ ...prev, remoteJoined: false }));
-          else setState((prev) => ({ ...prev, remoteVideo: null }));
+        client.on('user-unpublished', (user, mediaType) => {
+          if (mediaType === 'video') {
+            const remoteUid = Number(user.uid);
+            setState((prev) => {
+              const { [remoteUid]: _gone, ...remoteVideos } = prev.remoteVideos;
+              return { ...prev, remoteVideos };
+            });
+          }
         });
-        client.on('user-left', () =>
-          setState((prev) => ({ ...prev, remoteJoined: false, remoteVideo: null }))
-        );
+        client.on('user-left', (user) => removeRemoteUid(Number(user.uid)));
 
         setState((prev) => ({ ...prev, phase: 'joining' }));
         await client.join(appId, channelName, token, uid);
@@ -176,17 +205,48 @@ export function useAgora() {
   const toggleSpeaker = useCallback(() => {
     const next = !speakerOnRef.current;
     speakerOnRef.current = next;
-    remoteAudioRef.current?.setVolume(next ? 100 : 0);
+    remoteAudioRef.current.forEach((track) => track.setVolume(next ? 100 : 0));
     setState((prev) => ({ ...prev, speakerOn: next }));
   }, []);
 
+  /** Starts the camera and publishes it (used when a voice call turns into video). */
+  const enableCamera = useCallback(async (): Promise<boolean> => {
+    const client = clientRef.current;
+    if (!client) return false;
+    if (videoRef.current) {
+      await videoRef.current.setEnabled(true);
+      setState((prev) => ({ ...prev, cameraOn: true, localVideo: prev.sharing ? prev.localVideo : videoRef.current }));
+      return true;
+    }
+    try {
+      const AgoraRTC = (await import('agora-rtc-sdk-ng')).default;
+      const camera = await AgoraRTC.createCameraVideoTrack({ encoderConfig: '480p_1' });
+      videoRef.current = camera;
+      if (!screenRef.current) await client.publish(camera);
+      setState((prev) => ({
+        ...prev,
+        cameraOn: true,
+        notice: undefined,
+        localVideo: prev.sharing ? prev.localVideo : camera,
+      }));
+      return true;
+    } catch {
+      setState((prev) => ({ ...prev, notice: 'Camera unavailable or permission denied' }));
+      return false;
+    }
+  }, []);
+
+  /** Toggles the camera; creates it first if the call started without one. */
   const toggleCamera = useCallback(async () => {
     const track = videoRef.current;
-    if (!track) return;
+    if (!track) {
+      await enableCamera();
+      return;
+    }
     const on = !track.enabled;
     await track.setEnabled(on);
     setState((prev) => ({ ...prev, cameraOn: on }));
-  }, []);
+  }, [enableCamera]);
 
   /** Swap the published video between the camera and a shared screen. */
   const toggleScreenShare = useCallback(async () => {
@@ -241,6 +301,7 @@ export function useAgora() {
     leave,
     toggleMute,
     toggleCamera,
+    enableCamera,
     toggleSpeaker,
     toggleScreenShare,
     listCameras,

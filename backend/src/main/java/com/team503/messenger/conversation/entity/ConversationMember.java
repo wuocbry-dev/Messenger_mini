@@ -39,6 +39,12 @@ public class ConversationMember {
         return new ConversationMember(conversationId, userId, "OWNER", joinedAt);
     }
 
+    /** Bring a member who left back into the conversation. */
+    public void rejoin(LocalDateTime now) {
+        this.leftAt = null;
+        this.joinedAt = now;
+    }
+
     public ConversationMemberId getId() {
         return id;
     }

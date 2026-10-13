@@ -828,3 +828,153 @@
     padding: var(--space-2) var(--space-3);
   }
 }
+
+/* ── Group calls ──────────────────────────────────────────── */
+
+/* Video: remote people tile the stage. */
+.vcall-grid {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  gap: 4px;
+  background: #05070c;
+}
+
+.vcall-grid--1 { grid-template-columns: 1fr; }
+.vcall-grid--2 { grid-template-columns: 1fr 1fr; }
+.vcall-grid--3,
+.vcall-grid--4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+.vcall-grid--5,
+.vcall-grid--6 { grid-template-columns: repeat(3, 1fr); grid-template-rows: 1fr 1fr; }
+.vcall-grid--3 .vcall-tile:first-child { grid-column: 1 / -1; }
+
+.vcall-tile {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: #0b0f17;
+}
+
+.vcall-tile .vcall-remote,
+.vcall-tile .vcall-placeholder {
+  position: absolute;
+  inset: 0;
+}
+
+.vcall-tile--ringing .vcall-placeholder {
+  opacity: 0.6;
+}
+
+.vcall-tile-name {
+  position: absolute;
+  left: var(--space-3);
+  bottom: 96px;
+  max-width: calc(100% - var(--space-6));
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  z-index: 1;
+}
+
+.vcall-grid--1 .vcall-tile-name {
+  bottom: auto;
+  top: 84px;
+  left: var(--space-5);
+}
+
+.vcall-grid--5 .vcall-placeholder .avatar-xl,
+.vcall-grid--6 .vcall-placeholder .avatar-xl,
+.vcall-grid--3 .vcall-placeholder .avatar-xl,
+.vcall-grid--4 .vcall-placeholder .avatar-xl {
+  width: 72px;
+  height: 72px;
+}
+
+/* Voice: everyone on the call as a card. */
+.call-grid {
+  width: min(560px, 100%);
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.call-grid--1,
+.call-grid--2 { grid-template-columns: repeat(2, minmax(0, 160px)); justify-content: center; }
+.call-grid--5,
+.call-grid--6,
+.call-grid--7,
+.call-grid--8 { grid-template-columns: repeat(4, 1fr); }
+.call-grid--3,
+.call-grid--4 { grid-template-columns: repeat(2, minmax(0, 180px)); justify-content: center; }
+
+.call-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: var(--space-4) var(--space-2);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-2xl);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  opacity: 0.8;
+  transition: opacity var(--transition-base), box-shadow var(--transition-base);
+}
+
+.call-tile--live {
+  opacity: 1;
+  box-shadow: 0 8px 22px rgba(91, 91, 214, 0.2), 0 0 0 2px var(--color-primary-alpha);
+}
+
+.call-tile-avatar .avatar-xl {
+  width: 72px;
+  height: 72px;
+}
+
+.call-tile-avatar .avatar-xl .avatar-initials {
+  font-size: 1.6rem;
+}
+
+.call-tile-name {
+  max-width: 100%;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.call-tile-sub {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.call-tile--live .call-tile-sub {
+  color: var(--color-online);
+}
+
+.call-ctl:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.call-controls {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 768px) {
+  .call-grid--5,
+  .call-grid--6,
+  .call-grid--7,
+  .call-grid--8 { grid-template-columns: repeat(3, 1fr); }
+
+  .vcall-tile-name { bottom: 84px; }
+}

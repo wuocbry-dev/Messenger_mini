@@ -2,12 +2,19 @@ import { api } from '../../../shared/api';
 import type { CallResponse, CallTokenResponse, CallHistoryPage } from '../../../shared/types';
 
 export const callApi = {
+  /** Omit `calleeId` (null) to ring every other member of a group conversation. */
   start(
     conversationId: number,
-    calleeId: number,
+    calleeId: number | null,
     callType: 'VOICE' | 'VIDEO' = 'VOICE',
   ): Promise<CallResponse> {
     return api.post<CallResponse>('/api/v1/calls', { conversationId, calleeId, callType });
+  },
+  invite(callId: number, userIds: number[]): Promise<CallResponse> {
+    return api.post<CallResponse>(`/api/v1/calls/${callId}/invite`, { userIds });
+  },
+  upgradeToVideo(callId: number): Promise<CallResponse> {
+    return api.post<CallResponse>(`/api/v1/calls/${callId}/video`);
   },
   accept(callId: number): Promise<CallResponse> {
     return api.post<CallResponse>(`/api/v1/calls/${callId}/accept`);

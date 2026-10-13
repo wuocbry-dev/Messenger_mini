@@ -114,12 +114,38 @@ export interface PresenceUpdate {
   lastSeenAt?: string;
 }
 
+export type CallParticipantState = 'INVITED' | 'JOINED' | 'DECLINED' | 'LEFT' | 'MISSED';
+
+export interface CallParticipant {
+  userId: number;
+  username: string;
+  displayName: string;
+  avatarUrl?: string | null;
+  state: CallParticipantState;
+}
+
+export type CallEventType =
+  | 'INCOMING'
+  | 'ACCEPTED'
+  | 'REJECTED'
+  | 'CANCELLED'
+  | 'MISSED'
+  | 'ENDED'
+  | 'PARTICIPANT_INVITED'
+  | 'PARTICIPANT_JOINED'
+  | 'PARTICIPANT_LEFT'
+  | 'PARTICIPANT_DECLINED'
+  | 'MEDIA_UPGRADED'
+  | 'CONVERSATION_CHANGED';
+
+/** Every event carries the full participant list. */
 export interface CallEvent {
-  type: 'INCOMING' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED' | 'MISSED' | 'ENDED';
+  type: CallEventType;
   callId: number;
   conversationId: number;
   callerId: number;
-  calleeId: number;
+  /** The user whose action caused the event; null for system events. */
+  actorId?: number | null;
   callType: 'VOICE' | 'VIDEO';
   status: string;
   agoraChannelName: string;
@@ -127,6 +153,7 @@ export interface CallEvent {
   answeredAt?: string;
   endedAt?: string;
   endReason?: string;
+  participants: CallParticipant[];
 }
 
 export interface CallTokenResponse {
@@ -184,9 +211,10 @@ export interface CallResponse {
   id: number;
   conversationId: number;
   callerId: number;
-  calleeId: number;
+  /** Only set for 1-to-1 calls. */
+  calleeId?: number | null;
   callerUsername: string;
-  calleeUsername: string;
+  calleeUsername?: string | null;
   callType: 'VOICE' | 'VIDEO';
   status: string;
   agoraChannelName: string;
@@ -195,4 +223,6 @@ export interface CallResponse {
   endedAt?: string;
   endedBy?: number;
   endReason?: string;
+  groupCall: boolean;
+  participants: CallParticipant[];
 }

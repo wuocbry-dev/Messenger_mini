@@ -57,7 +57,8 @@ public class Call {
     @Column(name = "caller_id", nullable = false, columnDefinition = "BIGINT UNSIGNED")
     private Long callerId;
 
-    @Column(name = "callee_id", nullable = false, columnDefinition = "BIGINT UNSIGNED")
+    /** The single invitee of a 1-to-1 call; null for calls started in a group. */
+    @Column(name = "callee_id", columnDefinition = "BIGINT UNSIGNED")
     private Long calleeId;
 
     @Enumerated(EnumType.STRING)
@@ -106,6 +107,7 @@ public class Call {
         if (callerId.equals(calleeId)) {
             throw new IllegalArgumentException("Caller and callee must be different users");
         }
+        // calleeId may be null for a call started in a group conversation.
         return new Call(conversationId, callerId, calleeId, type, agoraChannelName, now);
     }
 
@@ -115,9 +117,9 @@ public class Call {
         this.answeredAt = now;
     }
 
-    public void markRejected(LocalDateTime now) {
+    public void markRejected(Long actorId, LocalDateTime now) {
         require(Status.RINGING);
-        finish(Status.REJECTED, calleeId, EndReason.REJECTED_BY_CALLEE, now);
+        finish(Status.REJECTED, actorId, EndReason.REJECTED_BY_CALLEE, now);
     }
 
     public void markCancelled(LocalDateTime now) {
@@ -143,8 +145,14 @@ public class Call {
         finish(Status.FAILED, null, EndReason.FAILED_NETWORK, now);
     }
 
-    public boolean isParticipant(Long userId) {
-        return callerId.equals(userId) || calleeId.equals(userId);
+    /** The call moved to another conversation (e.g. a new group chat was created). */
+    public void changeConversation(Long newConversationId) {
+        this.conversationId = newConversationId;
+    }
+
+    /** Voice call switched to video; a no-op if it already is. */
+    public void upgradeToVideo() {
+        this.callType = CallType.VIDEO;
     }
 
     private void finish(Status newStatus, Long actor, EndReason reason, LocalDateTime now) {

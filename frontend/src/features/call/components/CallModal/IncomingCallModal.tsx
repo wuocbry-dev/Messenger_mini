@@ -9,9 +9,11 @@ interface IncomingCallModalProps {
   onReject: () => void;
   callerName: string;
   callerAvatar?: string;
+  /** People in the call (the caller and the people being rung); more than two means a group call. */
+  groupSize?: number;
 }
 
-export function IncomingCallModal({ call, onAccept, onReject, callerName, callerAvatar }: IncomingCallModalProps) {
+export function IncomingCallModal({ call, onAccept, onReject, callerName, callerAvatar, groupSize = 0 }: IncomingCallModalProps) {
   const [ringing, setRinging] = useState(false);
 
   useEffect(() => {
@@ -24,6 +26,7 @@ export function IncomingCallModal({ call, onAccept, onReject, callerName, caller
   }, [call?.callId, call?.type]);
 
   const kind = call?.callType === 'VIDEO' ? 'Video' : 'Voice';
+  const isGroup = groupSize > 2;
 
   return (
     <Modal open={call?.type === 'INCOMING'} onClose={onReject} size="sm">
@@ -32,8 +35,11 @@ export function IncomingCallModal({ call, onAccept, onReject, callerName, caller
           <Avatar name={callerName} src={callerAvatar} size="lg" />
         </div>
         <div className="call-modal-pulse-ring" aria-hidden="true" />
-        <h2 className="call-modal-title">Incoming {kind} Call</h2>
-        <p className="call-modal-subtitle">{callerName}</p>
+        <h2 className="call-modal-title">Incoming {isGroup ? `Group ${kind}` : kind} Call</h2>
+        <p className="call-modal-subtitle">
+          {callerName}
+          {isGroup ? ` and ${groupSize - 1} ${groupSize - 1 === 1 ? 'other' : 'others'}` : ''}
+        </p>
 
         <div className="call-modal-actions">
           <button

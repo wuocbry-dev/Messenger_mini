@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import type { Conversation } from '../../../../shared/types';
 import { Avatar, Badge, EmptyState, Skeleton, SkeletonAvatar, IconButton } from '../../../../shared/components/ui';
 import { NewConversationModal } from '../NewConversationModal';
+import { NewGroupModal } from '../NewGroupModal';
+import { getConversationTitle } from '../../utils/conversationName';
 import './Sidebar.css';
 
 interface SidebarProps {
@@ -17,22 +19,20 @@ interface SidebarProps {
 }
 
 export function Sidebar({
+  currentUserId,
   conversations,
   activeConversationId,
   onSelectConversation,
   onlineUsers,
   loading,
-  onRefresh: _onRefresh,
+  onRefresh,
   open,
   onClose,
 }: SidebarProps) {
   const [showNewConv, setShowNewConv] = useState(false);
+  const [showNewGroup, setShowNewGroup] = useState(false);
 
-  const getConversationName = (conv: Conversation): string => {
-    if (conv.title) return conv.title;
-    if (conv.directWithUser) return conv.directWithUser.displayName;
-    return conv.directKey ?? `Conversation ${conv.id}`;
-  };
+  const getConversationName = (conv: Conversation): string => getConversationTitle(conv, currentUserId);
 
   const getOtherUser = (conv: Conversation) => {
     if (conv.directWithUser) return conv.directWithUser;
@@ -60,6 +60,19 @@ export function Sidebar({
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 5v14M5 12h14" />
+          </svg>
+        </IconButton>
+        <IconButton
+          label="New group"
+          variant="ghost"
+          size="md"
+          onClick={() => setShowNewGroup(true)}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
           </svg>
         </IconButton>
       </div>
@@ -130,6 +143,15 @@ export function Sidebar({
         )}
       </div>
 
+      <NewGroupModal
+        open={showNewGroup}
+        onClose={() => setShowNewGroup(false)}
+        onCreated={(conv) => {
+          setShowNewGroup(false);
+          onRefresh();
+          onSelectConversation(conv as unknown as Conversation);
+        }}
+      />
       <NewConversationModal
         open={showNewConv}
         onClose={() => setShowNewConv(false)}

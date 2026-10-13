@@ -15,6 +15,7 @@ The current approved schema baseline includes:
 - `stored_files`
 - `message_attachments`
 - `calls`
+- `call_participants`
 
 The existing root file `messenger_mini_mysql_schema.sql` records the current approved SQL baseline.
 

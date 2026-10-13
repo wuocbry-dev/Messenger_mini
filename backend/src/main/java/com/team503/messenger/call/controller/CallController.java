@@ -4,6 +4,7 @@ import com.team503.messenger.auth.security.AuthenticatedUser;
 import com.team503.messenger.call.dto.CallHistoryResponse;
 import com.team503.messenger.call.dto.CallResponse;
 import com.team503.messenger.call.dto.CallTokenResponse;
+import com.team503.messenger.call.dto.InviteToCallRequest;
 import com.team503.messenger.call.dto.StartCallRequest;
 import com.team503.messenger.call.service.CallService;
 import jakarta.validation.Valid;
@@ -55,6 +56,22 @@ public class CallController {
     @PostMapping("/{callId}/end")
     CallResponse endCall(@AuthenticationPrincipal AuthenticatedUser currentUser, @PathVariable Long callId) {
         return callService.endCall(currentUser.id(), callId);
+    }
+
+    /** Ring more people into the call (creates/extends the group chat). */
+    @PostMapping("/{callId}/invite")
+    CallResponse invite(
+            @AuthenticationPrincipal AuthenticatedUser currentUser,
+            @PathVariable Long callId,
+            @Valid @RequestBody InviteToCallRequest request
+    ) {
+        return callService.invite(currentUser.id(), callId, request.userIds());
+    }
+
+    /** Switch a voice call to video. */
+    @PostMapping("/{callId}/video")
+    CallResponse upgradeToVideo(@AuthenticationPrincipal AuthenticatedUser currentUser, @PathVariable Long callId) {
+        return callService.upgradeToVideo(currentUser.id(), callId);
     }
 
     @PostMapping("/{callId}/token")

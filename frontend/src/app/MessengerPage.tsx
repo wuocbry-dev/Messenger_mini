@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ChatPanel } from '../features/chat/components/ChatPanel';
-import { CallProvider } from '../features/call/components/CallProvider';
+import { CallProvider, OPEN_CONVERSATION_EVENT } from '../features/call/components/CallProvider';
 import { PendingCallLauncher } from './PendingCallLauncher';
 import { useRealtime } from '../shared/realtime/RealtimeProvider';
 import { conversationApi } from '../features/chat/api/conversationApi';
@@ -141,6 +141,15 @@ export function MessengerPage() {
           });
         });
         normalized.forEach((c) => {
+          // Everyone in a conversation, so group messages show real names and photos.
+          c.members?.forEach((m) => {
+            if (m.userId === user.id) return;
+            userMapRef.current.set(m.userId, {
+              displayName: m.displayName,
+              username: m.username,
+              avatarUrl: m.avatarUrl,
+            });
+          });
           if (c.directWithUser) {
             userMapRef.current.set(c.directWithUser.id, {
               displayName: c.directWithUser.displayName,
@@ -206,6 +215,14 @@ export function MessengerPage() {
   const handleCallEvent = useCallback(
     (payload: unknown) => {
       const event = payload as CallEvent;
+      // Being added to a call can create a group chat (or add me to one).
+      if (
+        event?.type === 'INCOMING' ||
+        event?.type === 'CONVERSATION_CHANGED' ||
+        event?.type === 'PARTICIPANT_INVITED'
+      ) {
+        void loadConversations();
+      }
       if (event?.type === 'REJECTED') {
         addToast('info', 'Call was declined');
       } else if (event?.type === 'CANCELLED') {
@@ -214,7 +231,7 @@ export function MessengerPage() {
         addToast('info', 'Call ended');
       }
     },
-    [addToast]
+    [addToast, loadConversations]
   );
 
   // The connection lives in RealtimeProvider (so it stays up on every page);
@@ -255,6 +272,30 @@ export function MessengerPage() {
     }
     setActiveConv(normalized);
   }, [normalizeConversation]);
+
+  // Open a conversation asked for by the call UI (e.g. the group chat created
+  // when someone is added to a call). It is selected once it is in the list.
+  const pendingOpenRef = useRef<number | null>(null);
+  const [openTick, setOpenTick] = useState(0);
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      pendingOpenRef.current = (e as CustomEvent<number>).detail;
+      void loadConversations();
+      setOpenTick((t) => t + 1);
+    };
+    document.addEventListener(OPEN_CONVERSATION_EVENT, onOpen);
+    return () => document.removeEventListener(OPEN_CONVERSATION_EVENT, onOpen);
+  }, [loadConversations]);
+
+  useEffect(() => {
+    const id = pendingOpenRef.current;
+    if (id == null) return;
+    const conv = conversations.find((c) => c.id === id);
+    if (conv) {
+      pendingOpenRef.current = null;
+      handleSelectConversation(conv);
+    }
+  }, [conversations, handleSelectConversation, openTick]);
 
   // Open a conversation requested by another page (e.g. the user directory).
   useEffect(() => {

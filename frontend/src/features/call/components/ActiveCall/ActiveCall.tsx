@@ -1,27 +1,36 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { ILocalVideoTrack, IRemoteVideoTrack } from 'agora-rtc-sdk-ng';
 import { Avatar } from '../../../../shared/components/ui';
+import type { CallParticipant } from '../../../../shared/types';
 import type { AgoraState } from '../../hooks/useAgora';
+import { AddPeopleModal } from '../AddPeopleModal';
 import './ActiveCall.css';
 
 interface ActiveCallProps {
-  peerName: string;
-  peerAvatar?: string;
+  /** Group chat name, if any; otherwise the people in the call are named. */
+  title?: string;
+  participants: CallParticipant[];
+  currentUserId: number;
   video: boolean;
-  /** Epoch ms when the peer's audio connected; null while ringing/connecting. */
+  /** Epoch ms when someone else's audio connected; null while ringing/connecting. */
   connectedAt: number | null;
   ringing: boolean;
   state: AgoraState;
+  /** A 1-to-1 chat turns into a new group chat when someone is added. */
+  inviteCreatesGroup: boolean;
   onToggleMute: () => void;
   onToggleCamera: () => void;
   onToggleSpeaker: () => void;
   onToggleShare: () => void;
+  onUpgradeToVideo: () => void;
+  onInvite: (userIds: number[]) => Promise<void>;
   listCameras: () => Promise<{ id: string; label: string }[]>;
   onSwitchCamera: (deviceId: string) => void;
   onEnd: () => void;
 }
 
 const WAVE_BARS = 27;
+const MAX_PARTICIPANTS = 8;
 
 function formatDuration(ms: number): string {
   const totalSec = Math.floor(ms / 1000);
@@ -75,11 +84,20 @@ const SpeakerIcon = ({ off }: { off: boolean }) => (
   </svg>
 );
 
-const CameraIcon = ({ off }: { off: boolean }) => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+const CameraIcon = ({ off, size = 22 }: { off: boolean; size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <polygon points="23 7 16 12 23 17 23 7" />
     <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
     {off && <line x1="1" y1="1" x2="23" y2="23" />}
+  </svg>
+);
+
+const AddPersonIcon = ({ size = 22 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <line x1="19" y1="8" x2="19" y2="14" />
+    <line x1="16" y1="11" x2="22" y2="11" />
   </svg>
 );
 
@@ -100,16 +118,20 @@ const EndIcon = () => (
 );
 
 export function ActiveCall({
-  peerName,
-  peerAvatar,
+  title,
+  participants,
+  currentUserId,
   video,
   connectedAt,
   ringing,
   state,
+  inviteCreatesGroup,
   onToggleMute,
   onToggleCamera,
   onToggleSpeaker,
   onToggleShare,
+  onUpgradeToVideo,
+  onInvite,
   listCameras,
   onSwitchCamera,
   onEnd,
@@ -117,9 +139,22 @@ export function ActiveCall({
   const [elapsed, setElapsed] = useState(0);
   const [minimized, setMinimized] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
   const [cameras, setCameras] = useState<{ id: string; label: string }[]>([]);
   const [fullscreen, setFullscreen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+
+  const present = useMemo(
+    () => participants.filter((p) => p.state === 'JOINED' || p.state === 'INVITED'),
+    [participants]
+  );
+  const others = present.filter((p) => p.userId !== currentUserId);
+  const isGroup = present.length > 2;
+  const peer = others[0] ?? participants.find((p) => p.userId !== currentUserId);
+  const peerName = isGroup ? title || others.map((p) => p.displayName).join(', ') : peer?.displayName ?? title ?? 'Call';
+  const peerAvatar = peer?.avatarUrl ?? undefined;
+  const headline = isGroup ? `${peerName}` : peerName;
+  const room = Math.max(0, MAX_PARTICIPANTS - present.length);
 
   useEffect(() => {
     const onChange = () => setFullscreen(document.fullscreenElement === rootRef.current);
@@ -159,28 +194,44 @@ export function ActiveCall({
     'Connecting...';
 
   const connected = state.remoteJoined;
+  const peopleLabel = `${present.filter((p) => p.state === 'JOINED').length} in call`;
 
-  /* ── Minimized pill (voice and video) ───────────────────────────── */
+  const addModal = (
+    <AddPeopleModal
+      open={addOpen}
+      onClose={() => setAddOpen(false)}
+      excludeIds={present.map((p) => p.userId)}
+      room={room}
+      onInvite={onInvite}
+      createsGroup={inviteCreatesGroup}
+    />
+  );
+
+  /* ── Minimized pill (voice and video) ─────────────────────── */
   if (minimized) {
     return (
-      <div className="active-call active-call--mini" role="dialog" aria-label="Call (minimized)">
-        <button className="call-mini-main" onClick={() => setMinimized(false)} aria-label="Expand call">
-          <Avatar name={peerName} src={peerAvatar} size="sm" />
-          <span className="call-mini-text">
-            <span className="call-mini-name">{peerName}</span>
-            <span className="call-mini-status">{statusLabel}</span>
-          </span>
-        </button>
-        <button className="call-mini-end" onClick={onEnd} aria-label="End call">
-          <EndIcon />
-        </button>
-      </div>
+      <>
+        <div className="active-call active-call--mini" role="dialog" aria-label="Call (minimized)">
+          <button className="call-mini-main" onClick={() => setMinimized(false)} aria-label="Expand call">
+            <Avatar name={peerName} src={peerAvatar} size="sm" />
+            <span className="call-mini-text">
+              <span className="call-mini-name">{headline}</span>
+              <span className="call-mini-status">{statusLabel}</span>
+            </span>
+          </button>
+          <button className="call-mini-end" onClick={onEnd} aria-label="End call">
+            <EndIcon />
+          </button>
+        </div>
+        {addModal}
+      </>
     );
   }
 
   /* ── Video call: stage layout ─────────────────────────────── */
   if (video) {
     const sharing = state.sharing;
+    const tiles = others.length > 0 ? others : peer ? [peer] : [];
     return (
       <div
         ref={rootRef}
@@ -190,23 +241,37 @@ export function ActiveCall({
       >
         <div className="vcall animate-fade-in">
           <div className="vcall-stage">
-            {state.remoteVideo ? (
-              <VideoView track={state.remoteVideo} className="vcall-remote" />
-            ) : (
-              <div className="vcall-placeholder">
-                <Avatar name={peerName} src={peerAvatar} size="xl" />
-                {connected && <span className="vcall-placeholder-note">Camera is off</span>}
-              </div>
-            )}
+            <div className={`vcall-grid vcall-grid--${Math.min(Math.max(tiles.length, 1), 6)}`}>
+              {tiles.map((p) => {
+                const track = state.remoteVideos[p.userId];
+                const ringingTile = p.state === 'INVITED';
+                return (
+                  <div key={p.userId} className={`vcall-tile${ringingTile ? ' vcall-tile--ringing' : ''}`}>
+                    {track ? (
+                      <VideoView track={track} className="vcall-remote" />
+                    ) : (
+                      <div className="vcall-placeholder">
+                        <Avatar name={p.displayName} src={p.avatarUrl ?? undefined} size="xl" />
+                        {!ringingTile && connected && <span className="vcall-placeholder-note">Camera is off</span>}
+                      </div>
+                    )}
+                    <span className="vcall-tile-name">
+                      {p.displayName}
+                      {ringingTile ? ' · Ringing...' : ''}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
 
             <header className="vcall-top">
               <div className="vcall-peer">
                 <Avatar name={peerName} src={peerAvatar} size="md" />
                 <div className="vcall-peer-text">
-                  <span className="vcall-peer-name">{peerName}</span>
+                  <span className="vcall-peer-name">{headline}</span>
                   <span className={`vcall-peer-status${connected ? ' vcall-peer-status--on' : ''}`}>
                     <span className="vcall-dot" aria-hidden="true" />
-                    {connected ? 'Online' : ringing ? 'Calling' : 'Connecting'}
+                    {isGroup ? peopleLabel : connected ? 'Online' : ringing ? 'Calling' : 'Connecting'}
                   </span>
                 </div>
                 <span className="vcall-timer" aria-live="polite">{statusLabel}</span>
@@ -265,18 +330,16 @@ export function ActiveCall({
                 <span className="vcall-ctl-circle"><MicIcon off={state.localMuted} /></span>
                 <span className="vcall-ctl-label">{state.localMuted ? 'Unmute' : 'Mute'}</span>
               </button>
-              {state.localVideo !== null && (
-                <button
-                  className={`vcall-ctl${!state.cameraOn ? ' vcall-ctl--off' : ''}`}
-                  onClick={onToggleCamera}
-                  disabled={sharing}
-                  aria-pressed={!state.cameraOn}
-                  aria-label={state.cameraOn ? 'Stop video' : 'Start video'}
-                >
-                  <span className="vcall-ctl-circle"><CameraIcon off={!state.cameraOn} /></span>
-                  <span className="vcall-ctl-label">{state.cameraOn ? 'Stop Video' : 'Start Video'}</span>
-                </button>
-              )}
+              <button
+                className={`vcall-ctl${!state.cameraOn ? ' vcall-ctl--off' : ''}`}
+                onClick={onToggleCamera}
+                disabled={sharing}
+                aria-pressed={!state.cameraOn}
+                aria-label={state.cameraOn ? 'Stop video' : 'Start video'}
+              >
+                <span className="vcall-ctl-circle"><CameraIcon off={!state.cameraOn} /></span>
+                <span className="vcall-ctl-label">{state.cameraOn ? 'Stop Video' : 'Start Video'}</span>
+              </button>
               <button
                 className={`vcall-ctl${sharing ? ' vcall-ctl--active' : ''}`}
                 onClick={onToggleShare}
@@ -293,6 +356,10 @@ export function ActiveCall({
                   </svg>
                 </span>
                 <span className="vcall-ctl-label">{sharing ? 'Stop Share' : 'Share'}</span>
+              </button>
+              <button className="vcall-ctl" onClick={() => setAddOpen(true)} disabled={room <= 0} aria-label="Add people to the call">
+                <span className="vcall-ctl-circle"><AddPersonIcon /></span>
+                <span className="vcall-ctl-label">Add</span>
               </button>
               <button className="vcall-ctl" onClick={() => setMinimized(true)} aria-label="Back to chat">
                 <span className="vcall-ctl-circle">
@@ -328,6 +395,7 @@ export function ActiveCall({
             </div>
           </div>
         </div>
+        {addModal}
       </div>
     );
   }
@@ -340,10 +408,10 @@ export function ActiveCall({
           <div className="call-panel-peer">
             <Avatar name={peerName} src={peerAvatar} size="md" />
             <div className="call-panel-peer-text">
-              <span className="call-panel-peer-name">{peerName}</span>
+              <span className="call-panel-peer-name">{headline}</span>
               <span className={`call-panel-peer-status${connected ? ' call-panel-peer-status--on' : ''}`}>
                 <span className="call-panel-dot" aria-hidden="true" />
-                {connected ? 'In call' : ringing ? 'Calling' : 'Connecting'}
+                {isGroup ? peopleLabel : connected ? 'In call' : ringing ? 'Calling' : 'Connecting'}
               </span>
             </div>
           </div>
@@ -362,21 +430,41 @@ export function ActiveCall({
         </header>
 
         <div className="call-panel-body">
-          <div className={`call-avatar${connected ? ' call-avatar--live' : ''}`}>
-            <span className="call-avatar-ring call-avatar-ring--outer" aria-hidden="true" />
-            <span className="call-avatar-ring call-avatar-ring--mid" aria-hidden="true" />
-            <div className="call-avatar-photo">
-              <Avatar name={peerName} src={peerAvatar} size="xl" />
+          {isGroup ? (
+            <div className={`call-grid call-grid--${Math.min(present.length, 8)}`}>
+              {present.map((p) => {
+                const me = p.userId === currentUserId;
+                const joined = p.state === 'JOINED';
+                return (
+                  <div key={p.userId} className={`call-tile${joined ? ' call-tile--live' : ''}`}>
+                    <div className="call-tile-avatar">
+                      <Avatar name={p.displayName} src={p.avatarUrl ?? undefined} size="xl" />
+                    </div>
+                    <span className="call-tile-name">{me ? 'You' : p.displayName}</span>
+                    <span className="call-tile-sub">{joined ? 'Connected' : 'Ringing...'}</span>
+                  </div>
+                );
+              })}
             </div>
-          </div>
+          ) : (
+            <>
+              <div className={`call-avatar${connected ? ' call-avatar--live' : ''}`}>
+                <span className="call-avatar-ring call-avatar-ring--outer" aria-hidden="true" />
+                <span className="call-avatar-ring call-avatar-ring--mid" aria-hidden="true" />
+                <div className="call-avatar-photo">
+                  <Avatar name={peerName} src={peerAvatar} size="xl" />
+                </div>
+              </div>
 
-          <div className={`call-wave${connected ? ' call-wave--live' : ''}`} aria-hidden="true">
-            {Array.from({ length: WAVE_BARS }).map((_, i) => (
-              <span key={i} style={{ ['--i' as string]: i }} />
-            ))}
-          </div>
+              <div className={`call-wave${connected ? ' call-wave--live' : ''}`} aria-hidden="true">
+                {Array.from({ length: WAVE_BARS }).map((_, i) => (
+                  <span key={i} style={{ ['--i' as string]: i }} />
+                ))}
+              </div>
+              <h2 className="call-name">{peerName}</h2>
+            </>
+          )}
 
-          <h2 className="call-name">{peerName}</h2>
           <div className="call-timer" aria-live="polite">{statusLabel}</div>
           <span className="call-quality">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
@@ -386,7 +474,7 @@ export function ActiveCall({
               <line x1="16" y1="7" x2="16" y2="17" />
               <line x1="20" y1="10" x2="20" y2="14" />
             </svg>
-            HD Voice Call
+            {isGroup ? 'Group voice call' : 'HD Voice Call'}
           </span>
           {state.notice && <p className="active-call-notice" role="status">{state.notice}</p>}
         </div>
@@ -414,12 +502,25 @@ export function ActiveCall({
             <span className="call-ctl-sub call-ctl-sub--accent">{state.speakerOn ? 'On' : 'Off'}</span>
           </button>
 
+          <button className="call-ctl" onClick={onUpgradeToVideo} aria-label="Switch to video call">
+            <span className="call-ctl-circle"><CameraIcon off={false} size={26} /></span>
+            <span className="call-ctl-label">Video</span>
+            <span className="call-ctl-sub">Switch</span>
+          </button>
+
+          <button className="call-ctl" onClick={() => setAddOpen(true)} disabled={room <= 0} aria-label="Add people to the call">
+            <span className="call-ctl-circle"><AddPersonIcon size={26} /></span>
+            <span className="call-ctl-label">Add</span>
+            <span className="call-ctl-sub">{isGroup ? `${present.length} people` : 'Group call'}</span>
+          </button>
+
           <button className="call-ctl call-ctl--end" onClick={onEnd} aria-label="End call">
             <span className="call-ctl-circle"><EndIcon /></span>
             <span className="call-ctl-label">End Call</span>
           </button>
         </div>
       </div>
+      {addModal}
     </div>
   );
 }

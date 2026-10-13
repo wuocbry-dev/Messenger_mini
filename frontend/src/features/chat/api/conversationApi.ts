@@ -18,6 +18,17 @@ export const conversationApi = {
     return api.post<Conversation>('/api/v1/conversations/direct', { targetUserId: otherUserId });
   },
 
+  createGroup(memberIds: number[], title?: string): Promise<Conversation> {
+    return api.post<Conversation>('/api/v1/conversations/group', {
+      title: title?.trim() || null,
+      memberIds,
+    });
+  },
+
+  addMembers(conversationId: number, userIds: number[]): Promise<Conversation> {
+    return api.post<Conversation>(`/api/v1/conversations/${conversationId}/members`, { userIds });
+  },
+
   createDirect(data: CreateDirectRequest): Promise<Conversation> {
     return api.post<Conversation>('/api/v1/conversations/direct', data);
   },

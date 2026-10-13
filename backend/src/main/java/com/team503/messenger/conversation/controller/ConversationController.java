@@ -1,7 +1,9 @@
 package com.team503.messenger.conversation.controller;
 
 import com.team503.messenger.auth.security.AuthenticatedUser;
+import com.team503.messenger.conversation.dto.AddMembersRequest;
 import com.team503.messenger.conversation.dto.ConversationDetailResponse;
+import com.team503.messenger.conversation.dto.CreateGroupConversationRequest;
 import com.team503.messenger.conversation.dto.ConversationResponse;
 import com.team503.messenger.conversation.dto.CreateDirectConversationRequest;
 import com.team503.messenger.conversation.service.ConversationService;
@@ -31,6 +33,23 @@ public class ConversationController {
             @Valid @RequestBody CreateDirectConversationRequest request
     ) {
         return conversationService.createOrGetDirectConversation(currentUser.id(), request);
+    }
+
+    @PostMapping("/group")
+    ConversationDetailResponse createGroup(
+            @AuthenticationPrincipal AuthenticatedUser currentUser,
+            @Valid @RequestBody CreateGroupConversationRequest request
+    ) {
+        return conversationService.createGroup(currentUser.id(), request);
+    }
+
+    @PostMapping("/{conversationId}/members")
+    ConversationDetailResponse addMembers(
+            @AuthenticationPrincipal AuthenticatedUser currentUser,
+            @PathVariable Long conversationId,
+            @Valid @RequestBody AddMembersRequest request
+    ) {
+        return conversationService.addMembers(currentUser.id(), conversationId, request);
     }
 
     @GetMapping

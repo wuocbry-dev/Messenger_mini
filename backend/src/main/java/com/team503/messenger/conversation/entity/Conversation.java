@@ -77,6 +77,15 @@ public class Conversation {
         );
     }
 
+    public static Conversation createGroup(String title, Long createdBy, LocalDateTime now) {
+        String cleaned = title == null || title.isBlank() ? null : title.trim();
+        return new Conversation("GROUP", null, cleaned, null, createdBy, now, now);
+    }
+
+    public boolean isGroup() {
+        return "GROUP".equals(type);
+    }
+
     public static String generateDirectKey(Long userId1, Long userId2) {
         long minId = Math.min(userId1, userId2);
         long maxId = Math.max(userId1, userId2);

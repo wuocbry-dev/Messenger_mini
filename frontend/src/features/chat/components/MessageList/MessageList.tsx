@@ -10,6 +10,8 @@ interface MessageListProps {
   currentUserId: number;
   typingUser?: string;
   typingUserAvatar?: string;
+  /** Several people are typing ("are typing" instead of "is typing"). */
+  typingPlural?: boolean;
   loading: boolean;
   /** Resolves a user's avatar URL; the message payload does not carry one. */
   getUserAvatar?: (userId: number) => string | undefined;
@@ -78,6 +80,11 @@ function formatFileSize(bytes?: number): string | null {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
+/** One tick state for the message: read only when every recipient has read it. */
+function summarizeReceipts(receipts: MessageReceipt[]): MessageReceipt {
+  return receipts.find((r) => r.state !== 'READ') ?? receipts[receipts.length - 1];
+}
+
 function ReceiptIcon({ receipt }: { receipt: MessageReceipt }) {
   if (receipt.state === 'READ') {
     return (
@@ -98,7 +105,7 @@ function ReceiptIcon({ receipt }: { receipt: MessageReceipt }) {
   );
 }
 
-export function MessageList({ messages, currentUserId, typingUser, typingUserAvatar, loading, getUserAvatar }: MessageListProps) {
+export function MessageList({ messages, currentUserId, typingUser, typingUserAvatar, typingPlural, loading, getUserAvatar }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [fileUrls, setFileUrls] = useState<Record<number, string>>({});
   const [lightbox, setLightbox] = useState<{ images: LightboxImage[]; index: number } | null>(null);
@@ -312,7 +319,7 @@ export function MessageList({ messages, currentUserId, typingUser, typingUserAva
                 <div className="message-meta">
                   <span className="message-time">{formatTime(msg.createdAt)}</span>
                   {isOwn && msg.receipts?.length > 0 && (
-                    <ReceiptIcon receipt={msg.receipts[msg.receipts.length - 1]} />
+                    <ReceiptIcon receipt={summarizeReceipts(msg.receipts)} />
                   )}
                 </div>
               </div>
@@ -327,7 +334,7 @@ export function MessageList({ messages, currentUserId, typingUser, typingUserAva
           <div className="typing-dots">
             <span /><span /><span />
           </div>
-          <span className="typing-label">{typingUser} is typing</span>
+          <span className="typing-label">{typingUser} {typingPlural ? 'are' : 'is'} typing</span>
         </div>
       )}
 

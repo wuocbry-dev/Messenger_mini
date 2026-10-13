@@ -10,6 +10,7 @@ import { MessageInput } from '../MessageInput';
 import { SharedMediaDrawer } from '../SharedMediaDrawer';
 import { WelcomeShowcase } from '../WelcomeShowcase';
 import { NewConversationModal } from '../NewConversationModal';
+import { getConversationTitle, memberCount } from '../../utils/conversationName';
 import { messageApi } from '../../api';
 import { useCall } from '../../../call/components/CallProvider';
 import './ChatPanel.css';
@@ -224,21 +225,35 @@ export function ChatPanel({
   const otherUser = activeConversation?.directWithUser;
   const otherUserId = otherUser?.id;
   // typingUsers holds login handles (often emails); show the display name instead.
-  const typingUser = otherUserId && typingUsers.has(otherUserId) ? getUserName(otherUserId) : undefined;
+  const isGroup = activeConversation?.type === 'GROUP';
+  const conversationTitle = activeConversation ? getConversationTitle(activeConversation, currentUserId) : '';
+  // In a group several people can be typing at once.
+  const typingNames = isGroup
+    ? Array.from(typingUsers.keys()).filter((id) => id !== currentUserId).map((id) => getUserName(id))
+    : [];
+  const typingUser = isGroup
+    ? typingNames.length > 0 ? typingNames.join(', ') : undefined
+    : otherUserId && typingUsers.has(otherUserId) ? getUserName(otherUserId) : undefined;
   const otherUserName = otherUser ? getUserName(otherUser.id) : undefined;
   const otherUserAvatar = otherUser ? getUserAvatar(otherUser.id) : undefined;
 
-  const handleStartCall = useCallback(() => {
-    if (otherUserId) {
-      void startCall(activeConversation!.id, otherUserId);
-    }
-  }, [otherUserId, activeConversation, startCall]);
-
-  const handleStartVideoCall = useCallback(() => {
-    if (otherUserId) {
-      void startCall(activeConversation!.id, otherUserId, 'VIDEO');
-    }
-  }, [otherUserId, activeConversation, startCall]);
+  const placeCall = useCallback(
+    (type: 'VOICE' | 'VIDEO') => {
+      if (!activeConversation) return;
+      if (activeConversation.type === 'GROUP') {
+        // No single callee: the server rings every other member.
+        void startCall(activeConversation.id, null, type, {
+          group: true,
+          title: getConversationTitle(activeConversation, currentUserId),
+        });
+      } else if (otherUserId) {
+        void startCall(activeConversation.id, otherUserId, type);
+      }
+    },
+    [activeConversation, otherUserId, startCall, currentUserId]
+  );
+  const handleStartCall = useCallback(() => placeCall('VOICE'), [placeCall]);
+  const handleStartVideoCall = useCallback(() => placeCall('VIDEO'), [placeCall]);
 
   const sidebarEl = (
     <Sidebar
@@ -271,6 +286,9 @@ export function ChatPanel({
                 otherUserName={otherUserName}
                 otherUserAvatar={otherUserAvatar}
                 otherUserId={otherUserId}
+                isGroup={isGroup}
+                memberCount={activeConversation ? memberCount(activeConversation) : 0}
+                displayTitle={conversationTitle}
                 onCallClick={handleStartCall}
                 onVideoCallClick={handleStartVideoCall}
                 callInProgress={!!activeCall}
@@ -281,7 +299,8 @@ export function ChatPanel({
                 messages={messages}
                 currentUserId={currentUserId}
                 typingUser={typingUser}
-                typingUserAvatar={otherUserAvatar}
+                typingUserAvatar={isGroup ? undefined : otherUserAvatar}
+                typingPlural={typingNames.length > 1}
                 loading={messagesLoading}
                 getUserAvatar={getUserAvatar}
               />

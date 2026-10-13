@@ -20,6 +20,11 @@ interface ChatHeaderProps {
   callInProgress?: boolean;
   onMenuClick?: () => void;
   onMediaClick?: () => void;
+  /** Group conversation: shows the member count and call buttons for the whole group. */
+  isGroup?: boolean;
+  memberCount?: number;
+  /** Overrides the name derived from the conversation (e.g. member names of an untitled group). */
+  displayTitle?: string;
 }
 
 export function ChatHeader({
@@ -36,9 +41,13 @@ export function ChatHeader({
   callInProgress,
   onMenuClick,
   onMediaClick,
+  isGroup = false,
+  memberCount = 0,
+  displayTitle,
 }: ChatHeaderProps) {
   const now = useNow(30_000); // keeps "Active 5 minutes ago" counting
-  const name = conversation.title
+  const name = displayTitle
+    ?? conversation.title
     ?? otherUserName
     ?? conversation.directWithUser?.displayName
     ?? 'Chat';
@@ -59,9 +68,11 @@ export function ChatHeader({
               otherUserId != null && online && !typing ? ' chat-header-status--online' : ''
             }`}
           >
-            {otherUserId != null && !typing && <span className="chat-header-status-dot" aria-hidden="true" />}
+            {otherUserId != null && !isGroup && !typing && <span className="chat-header-status-dot" aria-hidden="true" />}
             {typing
               ? 'typing...'
+              : isGroup
+              ? `${memberCount} members`
               : otherUserId != null
               ? (online ? 'Online' : formatLastSeen(lastSeenAt, now))
               : `${conversation.type.toLowerCase()} conversation`}
@@ -69,7 +80,7 @@ export function ChatHeader({
         </div>
       </div>
       <div className="chat-header-actions">
-        {otherUserId != null && !callInProgress && (
+        {(otherUserId != null || isGroup) && !callInProgress && (
           <IconButton
             label="Voice call"
             variant="ghost"
@@ -81,7 +92,7 @@ export function ChatHeader({
             </svg>
           </IconButton>
         )}
-        {otherUserId != null && !callInProgress && onVideoCallClick && (
+        {(otherUserId != null || isGroup) && !callInProgress && onVideoCallClick && (
           <IconButton
             label="Video call"
             variant="ghost"

@@ -22,6 +22,8 @@ interface Peer {
   username: string;
   avatarUrl?: string;
   online: boolean;
+  /** A call with several people; `id` is then not a user id. */
+  group?: boolean;
 }
 
 // ─── formatting helpers ───────────────────────────────────────────
@@ -74,8 +76,18 @@ const STATUS_LABEL: Record<string, string> = {
   ACCEPTED: 'In progress',
 };
 
+/** I was not the caller, so the call was incoming for me. */
+function isIncoming(call: CallResponse, me?: number): boolean {
+  return call.callerId !== me;
+}
+
 function isMissedFor(call: CallResponse, me?: number): boolean {
-  return call.status === 'MISSED' || (call.status === 'CANCELLED' && call.calleeId === me);
+  const mine = call.participants.find((p) => p.userId === me);
+  return (
+    call.status === 'MISSED' ||
+    mine?.state === 'MISSED' ||
+    (call.status === 'CANCELLED' && isIncoming(call, me))
+  );
 }
 
 function statusTone(call: CallResponse, me?: number): 'bad' | 'ok' | 'neutral' {
@@ -89,7 +101,7 @@ function describe(call: CallResponse, me?: number): string {
   if (isMissedFor(call, me)) return `Missed ${kind} call`;
   if (call.status === 'REJECTED') return `Rejected ${kind} call`;
   if (call.status === 'CANCELLED') return `Cancelled ${kind} call`;
-  return `${call.calleeId === me ? 'Incoming' : 'Outgoing'} ${kind} call`;
+  return `${call.groupCall ? 'Group ' : ''}${isIncoming(call, me) ? 'Incoming' : 'Outgoing'} ${kind} call`;
 }
 
 // ─── icons ────────────────────────────────────────────────────────
@@ -131,7 +143,7 @@ const MoreIcon = ({ size = 18 }: { size?: number }) => (
 
 function DirectionIcon({ call, me }: { call: CallResponse; me?: number }) {
   const missed = isMissedFor(call, me) || call.status === 'REJECTED';
-  const incoming = call.calleeId === me;
+  const incoming = isIncoming(call, me);
   const tone = missed ? 'call-dir--bad' : incoming ? 'call-dir--in' : 'call-dir--out';
   return (
     <span className={`call-dir ${tone}`} aria-hidden="true">
@@ -208,9 +220,23 @@ export function CallsPage() {
 
   const peerOf = useCallback(
     (call: CallResponse): Peer => {
+      if (call.groupCall) {
+        const others = call.participants.filter((p) => p.userId !== me);
+        const names = others.slice(0, 3).map((p) => p.displayName);
+        const extra = others.length - names.length;
+        return {
+          id: -call.id,
+          name: names.join(', ') + (extra > 0 ? ` +${extra}` : ''),
+          username: others.map((p) => p.username).join(', '),
+          avatarUrl: others[0]?.avatarUrl ?? undefined,
+          online: false,
+          group: true,
+        };
+      }
       const outgoing = call.callerId === me;
-      const id = outgoing ? call.calleeId : call.callerId;
-      const username = outgoing ? call.calleeUsername : call.callerUsername;
+      const other = call.participants.find((p) => p.userId !== me);
+      const id = (outgoing ? call.calleeId ?? other?.userId : call.callerId) ?? 0;
+      const username = (outgoing ? call.calleeUsername ?? other?.username : call.callerUsername) ?? '?';
       const user = users.get(id);
       return {
         id,
@@ -270,7 +296,8 @@ export function CallsPage() {
         state: {
           startCall: {
             conversationId: call.conversationId,
-            calleeId: peer.id,
+            calleeId: peer.group ? null : peer.id,
+            group: call.groupCall,
             callType,
             peerName: peer.name,
             peerAvatar: peer.avatarUrl,
@@ -289,7 +316,10 @@ export function CallsPage() {
 
   const copyUsername = useCallback(async (peer: Peer) => {
     try {
-      await navigator.clipboard.writeText(`@${peer.username}`);
+      const text = peer.group
+        ? peer.username.split(', ').map((u) => `@${u}`).join(' ')
+        : `@${peer.username}`;
+      await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -527,7 +557,7 @@ export function CallsPage() {
               </div>
               <div>
                 <dt>Direction</dt>
-                <dd>{selected.calleeId === me ? 'Incoming' : 'Outgoing'}</dd>
+                <dd>{isIncoming(selected, me) ? 'Incoming' : 'Outgoing'}</dd>
               </div>
               <div>
                 <dt>Status</dt>

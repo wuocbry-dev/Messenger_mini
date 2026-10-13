@@ -163,8 +163,6 @@ AGORA_RING_TIMEOUT_SECONDS (default 45)
 ## Out of scope for task 009
 
 - Call history retention policy.
-- Group calls. The current implementation is 1-to-1 only and enforces
-  exactly two participants.
 
 ## Video calls
 
@@ -176,3 +174,72 @@ AGORA_RING_TIMEOUT_SECONDS (default 45)
   microphone. If the camera is unavailable the call continues audio-only with
   a notice. The camera can be toggled during the call.
 - Media still flows through Agora only; Spring Boot never proxies it.
+
+## Group calls
+
+A call has one row in `calls` and one row per person in `call_participants`
+(migration `V2__group_calls.sql`). Up to **8 people** (`CallService.MAX_PARTICIPANTS`)
+can be in a call, the caller included.
+
+### Participants
+
+| State | Meaning |
+|---|---|
+| `INVITED` | Being rung. |
+| `JOINED` | In the call (the caller starts here). |
+| `DECLINED` | Rejected the call. |
+| `LEFT` | Was in the call and left. |
+| `MISSED` | Never answered (timeout, or the caller hung up first). |
+
+`calls.callee_id` is only set for 1-to-1 calls and is `NULL` when the call was
+started in a group conversation.
+
+### Call status rules
+
+- `RINGING` until the first invitee answers, then `ACCEPTED`.
+- `REJECTED` when every invitee declined while still `RINGING`; one decline in
+  a group does not end the call.
+- `CANCELLED` when the caller hangs up while `RINGING`; `MISSED` after
+  `app.agora.ring-timeout-seconds`.
+- A running call ends (`ENDED`) when fewer than two people remain `JOINED`.
+  People added to a running call who never answer are marked `MISSED`.
+
+### Starting and adding people
+
+- `POST /api/v1/calls` takes `conversationId`, an optional `calleeId` and
+  `callType`. In a group conversation omit `calleeId`: every other member is
+  rung (people already in another call are skipped).
+- `POST /api/v1/calls/{id}/invite` with `{ "userIds": [...] }` rings more
+  people. Only someone who is `JOINED` may invite.
+  - In a **1-to-1** call a new **group conversation** with everyone in the call
+    is created and the call moves to it (`calls.conversation_id` changes).
+  - In a **group** call the invited people are added to that group chat.
+- `POST /api/v1/calls/{id}/video` switches a voice call to video
+  (`calls.call_type` becomes `VIDEO`). Each person still opts in with their
+  camera.
+
+### Events
+
+Every `CallEvent` carries `actorId` and the full `participants` list
+(`userId`, `username`, `displayName`, `avatarUrl`, `state`), so a client can
+rebuild the call from any single event. Types:
+
+`INCOMING` (only to people being rung), `ACCEPTED` (first answer),
+`REJECTED`, `CANCELLED`, `MISSED`, `ENDED`, `PARTICIPANT_INVITED`,
+`PARTICIPANT_JOINED`, `PARTICIPANT_LEFT`, `PARTICIPANT_DECLINED`,
+`MEDIA_UPGRADED`, `CONVERSATION_CHANGED`.
+
+### Group chats
+
+- `POST /api/v1/conversations/group` (`title` optional, `memberIds` at least 2
+  others) creates a group conversation owned by the caller.
+- `POST /api/v1/conversations/{id}/members` adds people to a group; direct
+  conversations cannot grow.
+- Groups hold up to 50 people.
+
+### Known limits
+
+- A call whose participants close their tabs without leaving stays
+  `ACCEPTED` until someone leaves; there is no server-side cleanup yet
+  (the migration closes such calls older than a day).
+- Agora media is routed by Agora; the backend never proxies it.

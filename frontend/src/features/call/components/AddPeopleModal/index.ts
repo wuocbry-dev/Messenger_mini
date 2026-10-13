@@ -1,0 +1,1 @@
+export { AddPeopleModal } from './AddPeopleModal';

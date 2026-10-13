@@ -1,14 +1,14 @@
 /**
- * CallProvider — manages call state machine and wires STOMP events to call UI.
- * Renders IncomingCallModal when there's an incoming call,
- * and ActiveCall floating panel when in a call.
+ * CallProvider — owns the call state for 1-to-1 and group calls and wires the
+ * server's call events to the call UI.
  *
- * Call events are received via a DOM CustomEvent `messenger:call-event`
- * dispatched by the useWebSocket hook. This decouples the provider from
- * the WebSocket layer.
+ * The server sends the full participant list with every event, so the UI
+ * state is rebuilt from the latest snapshot rather than inferred from event
+ * order. Events arrive as DOM CustomEvents (`messenger:call-event`) dispatched
+ * by the websocket hook, which keeps this provider independent of the socket.
  */
-import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
-import type { CallEvent } from '../../../../shared/types';
+import React, { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import type { CallEvent, CallParticipant, CallResponse } from '../../../../shared/types';
 import { callApi } from '../../api/callApi';
 import { useAgora, type CallMedia } from '../../hooks/useAgora';
 import { IncomingCallModal } from '../CallModal';
@@ -16,22 +16,33 @@ import { ActiveCall } from '../ActiveCall';
 
 interface ActiveCallInfo {
   id: number;
+  conversationId: number;
   channelName: string;
-  peerName: string;
-  peerAvatar?: string;
   isInitiator: boolean;
-  startedAt: number;
   callType: CallMedia;
+  participants: CallParticipant[];
+  /** Name of the group chat the call belongs to, when known. */
+  title?: string;
+  /** The call already lives in a group chat (so adding people does not create one). */
+  inGroupChat: boolean;
+}
+
+interface StartCallOptions {
+  /** Name of the group chat (shown as the call's title). */
+  title?: string;
+  /** The conversation is a group chat. */
+  group?: boolean;
 }
 
 interface CallContextValue {
   incomingCall: CallEvent | null;
   activeCall: ActiveCallInfo | null;
+  /** Pass `calleeId = null` to ring everyone in a group conversation. */
   startCall: (
     conversationId: number,
-    calleeId: number,
+    calleeId: number | null,
     callType?: CallMedia,
-    peer?: { name?: string; avatar?: string }
+    options?: StartCallOptions
   ) => Promise<void>;
   acceptIncoming: () => Promise<void>;
   rejectIncoming: () => Promise<void>;
@@ -52,6 +63,26 @@ export function useCall(): CallContextValue {
 }
 
 const CALL_EVENT_NAME = 'messenger:call-event';
+export const OPEN_CONVERSATION_EVENT = 'messenger:open-conversation';
+
+const TERMINAL: ReadonlySet<CallEvent['type']> = new Set(['REJECTED', 'CANCELLED', 'MISSED', 'ENDED']);
+
+function fromResponse(call: CallResponse, isInitiator: boolean, extra?: StartCallOptions): ActiveCallInfo {
+  return {
+    id: call.id,
+    conversationId: call.conversationId,
+    channelName: call.agoraChannelName,
+    isInitiator,
+    callType: call.callType,
+    participants: call.participants,
+    title: extra?.title,
+    inGroupChat: extra?.group ?? call.participants.length > 2,
+  };
+}
+
+function openConversation(id: number): void {
+  document.dispatchEvent(new CustomEvent<number>(OPEN_CONVERSATION_EVENT, { detail: id }));
+}
 
 interface Props {
   currentUserId: number;
@@ -64,14 +95,22 @@ interface Props {
 export function CallProvider({ currentUserId, getUserName, getUserAvatar, onError, children }: Props) {
   const [incomingCall, setIncomingCall] = useState<CallEvent | null>(null);
   const [activeCall, setActiveCall] = useState<ActiveCallInfo | null>(null);
-  const [outgoing, setOutgoing] = useState(false);
-  const { state: agoraState, join, leave, toggleMute, toggleCamera, toggleSpeaker, toggleScreenShare, listCameras, switchCamera } = useAgora();
+  const {
+    state: agoraState,
+    join,
+    leave,
+    toggleMute,
+    toggleCamera,
+    enableCamera,
+    toggleSpeaker,
+    toggleScreenShare,
+    listCameras,
+    switchCamera,
+  } = useAgora();
   const incomingCallRef = useRef<CallEvent | null>(null);
   incomingCallRef.current = incomingCall;
   const activeCallRef = useRef<ActiveCallInfo | null>(null);
   activeCallRef.current = activeCall;
-  const outgoingRef = useRef(false);
-  outgoingRef.current = outgoing;
 
   const handleError = useCallback(
     (err: unknown) => {
@@ -81,53 +120,69 @@ export function CallProvider({ currentUserId, getUserName, getUserAvatar, onErro
     [onError]
   );
 
+  /** Nobody but me has joined yet, and someone is still being rung. */
+  const ringing = useMemo(() => {
+    if (!activeCall) return false;
+    const ps = activeCall.participants;
+    return (
+      ps.some((p) => p.state === 'INVITED') &&
+      !ps.some((p) => p.userId !== currentUserId && p.state === 'JOINED')
+    );
+  }, [activeCall, currentUserId]);
+
+  const joinChannel = useCallback(
+    async (callId: number, media: CallMedia) => {
+      const token = await callApi.getToken(callId);
+      await join(token.appId, token.agoraChannelName, token.uid, token.token, media);
+    },
+    [join]
+  );
+
   const startCall = useCallback(
     async (
       conversationId: number,
-      calleeId: number,
+      calleeId: number | null,
       callType: CallMedia = 'VOICE',
-      peer?: { name?: string; avatar?: string }
+      options?: StartCallOptions
     ) => {
       try {
         const call = await callApi.start(conversationId, calleeId, callType);
-        setActiveCall({
-          id: call.id,
-          channelName: call.agoraChannelName,
-          peerName: peer?.name ?? getUserName(calleeId),
-          peerAvatar: peer?.avatar ?? getUserAvatar(calleeId),
-          isInitiator: true,
-          startedAt: Date.now(),
-          callType,
-        });
-        setOutgoing(true);
-        const token = await callApi.getToken(call.id);
-        await join(token.appId, token.agoraChannelName, token.uid, token.token, callType);
+        setActiveCall(fromResponse(call, true, options));
+        await joinChannel(call.id, callType);
       } catch (err) {
         handleError(err);
         setActiveCall(null);
-        setOutgoing(false);
       }
     },
-    [currentUserId, join, getUserName, getUserAvatar, handleError]
+    [joinChannel, handleError]
   );
 
   const acceptIncoming = useCallback(async () => {
-    const call = incomingCallRef.current;
-    if (!call) return;
+    const incoming = incomingCallRef.current;
+    if (!incoming) return;
     setIncomingCall(null);
     try {
-      await callApi.accept(call.callId);
+      const call = await callApi.accept(incoming.callId);
+      setActiveCall(fromResponse(call, false));
+      try {
+        await joinChannel(call.id, call.callType);
+      } catch (err) {
+        // Could not get into the channel: leave the call so others are not left waiting.
+        void callApi.end(call.id).catch(() => {});
+        throw err;
+      }
     } catch (err) {
       handleError(err);
+      setActiveCall(null);
     }
-  }, [handleError]);
+  }, [joinChannel, handleError]);
 
   const rejectIncoming = useCallback(async () => {
-    const call = incomingCallRef.current;
-    if (!call) return;
+    const incoming = incomingCallRef.current;
+    if (!incoming) return;
     setIncomingCall(null);
     try {
-      await callApi.reject(call.callId);
+      await callApi.reject(incoming.callId);
     } catch (err) {
       handleError(err);
     }
@@ -135,90 +190,122 @@ export function CallProvider({ currentUserId, getUserName, getUserAvatar, onErro
 
   const endActiveCall = useCallback(async () => {
     const call = activeCallRef.current;
-    const ringing = outgoingRef.current;
+    const stillRinging =
+      !!call &&
+      call.participants.some((p) => p.state === 'INVITED') &&
+      !call.participants.some((p) => p.userId !== currentUserId && p.state === 'JOINED');
     setActiveCall(null);
-    setOutgoing(false);
     if (call) {
       try {
-        // Caller still ringing -> cancel; otherwise the call was accepted -> end.
-        await (ringing ? callApi.cancel(call.id) : callApi.end(call.id));
+        // Caller still ringing -> cancel; otherwise leave the running call.
+        await (stillRinging && call.isInitiator ? callApi.cancel(call.id) : callApi.end(call.id));
       } catch (err) {
         handleError(err);
       }
     }
     await leave();
-  }, [leave, handleError]);
+  }, [leave, handleError, currentUserId]);
 
-  // Start the duration clock when the peer's audio first connects.
+  /** Rings more people; errors are shown by the dialog that asked. */
+  const inviteToCall = useCallback(async (userIds: number[]) => {
+    const call = activeCallRef.current;
+    if (!call) return;
+    const res = await callApi.invite(call.id, userIds);
+    setActiveCall((prev) =>
+      prev && prev.id === res.id
+        ? {
+            ...prev,
+            participants: res.participants,
+            conversationId: res.conversationId,
+            inGroupChat: true,
+          }
+        : prev
+    );
+    if (res.conversationId !== call.conversationId) openConversation(res.conversationId);
+  }, []);
+
+  /** Voice -> video: start my camera, then tell everyone the call is now video. */
+  const upgradeToVideo = useCallback(async () => {
+    const call = activeCallRef.current;
+    if (!call) return;
+    const ok = await enableCamera();
+    if (!ok) return;
+    try {
+      const res = await callApi.upgradeToVideo(call.id);
+      setActiveCall((prev) =>
+        prev && prev.id === res.id ? { ...prev, callType: 'VIDEO', participants: res.participants } : prev
+      );
+    } catch (err) {
+      handleError(err);
+    }
+  }, [enableCamera, handleError]);
+
+  // Start the duration clock when someone else's audio first connects.
   const [connectedAt, setConnectedAt] = useState<number | null>(null);
   useEffect(() => {
     if (!activeCall) setConnectedAt(null);
     else if (agoraState.remoteJoined) setConnectedAt((prev) => prev ?? Date.now());
   }, [activeCall, agoraState.remoteJoined]);
 
-  // Bridge: subscribe to STOMP call events and update call state.
+  // Bridge: apply the server's call events.
   useEffect(() => {
     const handler = (e: Event) => {
       const event = (e as CustomEvent<CallEvent>).detail;
       if (!event?.type) return;
-      switch (event.type) {
-        case 'INCOMING':
-          // The caller also receives INCOMING (multi-device sync); never ring ourselves.
-          if (event.callerId !== currentUserId && !activeCallRef.current) {
-            setIncomingCall(event);
-          }
-          break;
-        case 'ACCEPTED':
-          if (outgoingRef.current) {
-            setOutgoing(false);
-          } else {
-            setIncomingCall(null);
-            setActiveCall({
-              id: event.callId,
-              channelName: event.agoraChannelName,
-              peerName: getUserName(event.callerId),
-              peerAvatar: getUserAvatar(event.callerId),
-              isInitiator: false,
-              startedAt: Date.now(),
-              callType: event.callType,
-            });
-            callApi
-              .getToken(event.callId)
-              .then((token) =>
-                join(token.appId, token.agoraChannelName, token.uid, token.token, event.callType)
-              )
-              .catch(handleError);
-          }
-          break;
-        case 'REJECTED':
-          setOutgoing(false);
+
+      const active = activeCallRef.current;
+      const incoming = incomingCallRef.current;
+
+      // Someone is ringing me (a new call, or I was added to a running one).
+      if (event.type === 'INCOMING') {
+        if (event.actorId !== currentUserId && !active && !incoming) {
+          setIncomingCall(event);
+        }
+        return;
+      }
+
+      // Updates about the call that is ringing me.
+      if (incoming && incoming.callId === event.callId) {
+        const answeredElsewhere =
+          event.actorId === currentUserId &&
+          (event.type === 'ACCEPTED' || event.type === 'PARTICIPANT_JOINED');
+        if (TERMINAL.has(event.type) || answeredElsewhere) {
+          setIncomingCall(null);
+        } else {
+          setIncomingCall({ ...event, type: 'INCOMING' });
+        }
+        return;
+      }
+
+      // Updates about the call I am in.
+      if (active && active.id === event.callId) {
+        if (TERMINAL.has(event.type)) {
           setActiveCall(null);
           void leave();
-          break;
-        case 'CANCELLED':
-          // Callee side: caller hung up before answering.
-          setIncomingCall((cur) => (cur?.callId === event.callId ? null : cur));
-          break;
-        case 'MISSED':
-          // Ring timeout: callee's prompt closes, caller's outgoing call ends.
-          setIncomingCall((cur) => (cur?.callId === event.callId ? null : cur));
-          if (activeCallRef.current?.id === event.callId) {
-            setOutgoing(false);
-            setActiveCall(null);
-            void leave();
-            onError?.('No answer');
-          }
-          break;
-        case 'ENDED':
-          setActiveCall(null);
-          setOutgoing(false);
-          void leave();
-          break;
+          if (event.type === 'MISSED') onError?.('No answer');
+          return;
+        }
+        setActiveCall({
+          ...active,
+          callType: event.callType,
+          conversationId: event.conversationId,
+          participants: event.participants,
+          inGroupChat: active.inGroupChat || event.type === 'CONVERSATION_CHANGED',
+        });
+        if (event.type === 'CONVERSATION_CHANGED') openConversation(event.conversationId);
       }
     };
     document.addEventListener(CALL_EVENT_NAME, handler);
     return () => document.removeEventListener(CALL_EVENT_NAME, handler);
-  }, [currentUserId, join, leave, getUserName, getUserAvatar, handleError, onError]);
+  }, [currentUserId, leave, onError]);
+
+  const caller = incomingCall?.participants.find((p) => p.userId === incomingCall.callerId);
+  const incomingName = caller?.displayName ?? (incomingCall ? getUserName(incomingCall.callerId) : '');
+  const incomingAvatar =
+    caller?.avatarUrl ?? (incomingCall ? getUserAvatar(incomingCall.callerId) : undefined) ?? undefined;
+  const incomingPeople = incomingCall
+    ? incomingCall.participants.filter((p) => p.state === 'JOINED' || p.state === 'INVITED').length
+    : 0;
 
   return (
     <CallContext.Provider
@@ -230,22 +317,27 @@ export function CallProvider({ currentUserId, getUserName, getUserAvatar, onErro
         call={incomingCall}
         onAccept={() => void acceptIncoming()}
         onReject={() => void rejectIncoming()}
-        callerName={incomingCall ? getUserName(incomingCall.callerId) : ''}
-        callerAvatar={incomingCall ? getUserAvatar(incomingCall.callerId) : undefined}
+        callerName={incomingName}
+        callerAvatar={incomingAvatar}
+        groupSize={incomingPeople}
       />
 
       {activeCall && (
         <ActiveCall
-          peerName={activeCall.peerName}
-          peerAvatar={activeCall.peerAvatar}
+          title={activeCall.title}
+          participants={activeCall.participants}
+          currentUserId={currentUserId}
           video={activeCall.callType === 'VIDEO'}
           connectedAt={connectedAt}
-          ringing={outgoing}
+          ringing={ringing}
           state={agoraState}
+          inviteCreatesGroup={!activeCall.inGroupChat}
           onToggleMute={() => void toggleMute()}
           onToggleCamera={() => void toggleCamera()}
           onToggleSpeaker={toggleSpeaker}
           onToggleShare={() => void toggleScreenShare()}
+          onUpgradeToVideo={() => void upgradeToVideo()}
+          onInvite={inviteToCall}
           listCameras={listCameras}
           onSwitchCamera={(id) => void switchCamera(id)}
           onEnd={() => void endActiveCall()}

@@ -4,7 +4,9 @@ import { useCall } from '../features/call/components/CallProvider';
 
 export interface StartCallRequest {
   conversationId: number;
-  calleeId: number;
+  /** null rings everyone in a group conversation. */
+  calleeId: number | null;
+  group?: boolean;
   callType: 'VOICE' | 'VIDEO';
   peerName?: string;
   peerAvatar?: string;
@@ -28,10 +30,7 @@ export function PendingCallLauncher() {
     handled.current = req.nonce;
     // Also open that conversation behind the call UI.
     navigate(location.pathname, { replace: true, state: { openConversationId: req.conversationId } });
-    void startCall(req.conversationId, req.calleeId, req.callType, {
-      name: req.peerName,
-      avatar: req.peerAvatar,
-    });
+    void startCall(req.conversationId, req.calleeId, req.callType, { group: req.group });
   }, [location, navigate, startCall]);
 
   return null;

@@ -16,13 +16,15 @@ public interface CallRepository extends JpaRepository<Call, Long> {
 
     Page<Call> findByConversationIdOrderByStartedAtDesc(Long conversationId, Pageable pageable);
 
-    @Query("SELECT c FROM Call c WHERE c.callerId = :userId OR c.calleeId = :userId ORDER BY c.startedAt DESC")
+    /** Calls the user took part in or was invited to (missed calls included). */
+    @Query("""
+            SELECT c FROM Call c
+            WHERE c.id IN (SELECT p.id.callId FROM CallParticipant p WHERE p.id.userId = :userId)
+            ORDER BY c.startedAt DESC
+            """)
     Page<Call> findByUserIdOrderByStartedAtDesc(@Param("userId") Long userId, Pageable pageable);
 
     boolean existsByConversationIdAndStatusIn(Long conversationId, Collection<Call.Status> statuses);
-
-    @Query("SELECT COUNT(c) > 0 FROM Call c WHERE (c.callerId = :userId OR c.calleeId = :userId) AND c.status IN :statuses")
-    boolean existsActiveForUser(@Param("userId") Long userId, @Param("statuses") Collection<Call.Status> statuses);
 
     List<Call> findByStatusAndStartedAtBefore(Call.Status status, LocalDateTime threshold);
 }
