@@ -72,26 +72,6 @@
   flex-shrink: 0;
 }
 
-.sidebar-logout-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: none;
-  background: transparent;
-  color: var(--color-text-muted);
-  border-radius: var(--radius-lg);
-  cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast);
-  flex-shrink: 0;
-}
-
-.sidebar-logout-btn:hover {
-  background: var(--color-danger-light);
-  color: var(--color-danger);
-}
-
 @media (max-width: 420px) {
   .sidebar-nav-label {
     display: none;

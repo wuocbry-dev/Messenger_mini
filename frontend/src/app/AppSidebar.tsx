@@ -1,15 +1,6 @@
 import React from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import './AppSidebar.css';
-
-interface AppSidebarProps {
-  user: {
-    id: number;
-    username: string;
-    displayName: string;
-    avatarUrl?: string;
-  } | null;
-}
 
 const navItems = [
   {
@@ -54,34 +45,11 @@ const navItems = [
   },
 ];
 
-export function AppSidebar({ user }: AppSidebarProps) {
-  const navigate = useNavigate();
-
-  const handleLogout = async () => {
-    try {
-      const { authApi } = await import('../features/auth/api/authApi');
-      await authApi.logout();
-    } catch { /* ignore */ }
-    sessionStorage.clear();
-    navigate('/auth');
-  };
-
+export function AppSidebar() {
   return (
     <nav className="app-sidebar" aria-label="Main navigation">
       <div className="app-sidebar-head">
         <h1 className="app-sidebar-title">Messenger Mini</h1>
-        <button
-          className="sidebar-logout-btn"
-          onClick={handleLogout}
-          aria-label={`Sign out${user ? ` (${user.displayName})` : ''}`}
-          title={user ? `Sign out (${user.displayName})` : 'Sign out'}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-            <polyline points="16 17 21 12 16 7" />
-            <line x1="21" y1="12" x2="9" y2="12" />
-          </svg>
-        </button>
       </div>
 
       <div className="sidebar-nav">

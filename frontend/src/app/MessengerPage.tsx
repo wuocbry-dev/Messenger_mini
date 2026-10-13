@@ -159,6 +159,13 @@ export function MessengerPage() {
     void loadConversations();
   }, [loadConversations]);
 
+  // Avatar URLs in conversation details expire; refresh a bit after the cache
+  // window so idle sessions do not end up with broken pictures.
+  useEffect(() => {
+    const timer = setInterval(() => void loadConversations(), DETAIL_TTL_MS + 60_000);
+    return () => clearInterval(timer);
+  }, [loadConversations]);
+
   // ─── WebSocket handlers ───────────────────────────────────────────
   const handleMessage = useCallback((payload: unknown) => {
     const msg = payload as Message;
