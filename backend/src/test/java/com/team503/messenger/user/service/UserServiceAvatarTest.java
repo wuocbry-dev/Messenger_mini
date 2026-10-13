@@ -9,6 +9,7 @@ import com.team503.messenger.file.entity.StoredFile;
 import com.team503.messenger.file.exception.FileException;
 import com.team503.messenger.file.repository.StoredFileRepository;
 import com.team503.messenger.file.service.ObjectStorageService;
+import com.team503.messenger.presence.service.PresenceService;
 import com.team503.messenger.user.dto.UpdateProfileRequest;
 import com.team503.messenger.user.dto.UserResponse;
 import com.team503.messenger.user.entity.User;
@@ -45,7 +46,7 @@ class UserServiceAvatarTest {
         when(user.getUsername()).thenReturn("alice");
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
         when(storage.createDownloadUrl(KEY)).thenReturn(URI.create("https://r2.example/avatar?sig=1"));
-        service = new UserService(userRepository, fileRepository, new AvatarUrlResolver(storage), CLOCK);
+        service = new UserService(userRepository, fileRepository, new AvatarUrlResolver(storage), mock(PresenceService.class), CLOCK);
     }
 
     private StoredFile file(long uploaderId, String mime) {

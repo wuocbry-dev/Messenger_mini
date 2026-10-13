@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ChatPanel } from '../features/chat/components/ChatPanel';
 import { CallProvider } from '../features/call/components/CallProvider';
+import { PendingCallLauncher } from './PendingCallLauncher';
 import { useWebSocket } from '../shared/hooks/useWebSocket';
 import { conversationApi } from '../features/chat/api/conversationApi';
 import { authApi } from '../features/auth/api/authApi';
@@ -30,6 +31,7 @@ interface UserSummary {
 
 export function MessengerPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [user, setUser] = useState<UserSummary | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [convLoading, setConvLoading] = useState(true);
@@ -241,6 +243,17 @@ export function MessengerPage() {
     setActiveConv(normalized);
   }, [normalizeConversation]);
 
+  // Open a conversation requested by another page (e.g. the user directory).
+  useEffect(() => {
+    const id = (location.state as { openConversationId?: number } | null)?.openConversationId;
+    if (!id || convLoading) return;
+    const conv = conversations.find((c) => c.id === id);
+    if (conv) {
+      handleSelectConversation(conv);
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location, convLoading, conversations, handleSelectConversation, navigate]);
+
   const getUserName = useCallback((userId: number): string => {
     return userMapRef.current.get(userId)?.displayName ?? `User ${userId}`;
   }, []);
@@ -270,6 +283,7 @@ export function MessengerPage() {
       getUserAvatar={getUserAvatar}
       onError={(msg) => addToast('error', msg)}
     >
+      <PendingCallLauncher />
       <div className="messenger-page">
         <ChatPanel
           conversations={conversations}

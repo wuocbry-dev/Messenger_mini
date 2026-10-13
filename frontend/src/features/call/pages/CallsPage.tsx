@@ -1,215 +1,545 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Avatar } from '../../../shared/components/ui/Avatar';
 import { EmptyState } from '../../../shared/components/ui/EmptyState';
 import { Skeleton } from '../../../shared/components/ui/Skeleton';
+import { Alert } from '../../../shared/components/ui/Alert';
 import { callApi } from '../api/callApi';
+import { userApi } from '../../chat/api/userApi';
 import { loadAuthFromStorage } from '../../auth/store/authStore';
-import type { CallResponse } from '../../../shared/types';
+import { parseUtc } from '../../../shared/utils/datetime';
+import type { CallResponse, UserSearchResult } from '../../../shared/types';
 import './CallsPage.css';
 
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-  
-  if (diffDays === 0) {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  } else if (diffDays === 1) {
-    return 'Yesterday';
-  } else if (diffDays < 7) {
-    return date.toLocaleDateString([], { weekday: 'short' });
-  } else {
-    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-  }
+type Filter = 'all' | 'missed' | 'voice' | 'video';
+
+const PAGE_SIZE = 30;
+const USERS_REFRESH_MS = 30_000;
+
+interface Peer {
+  id: number;
+  name: string;
+  username: string;
+  avatarUrl?: string;
+  online: boolean;
 }
 
-function formatDuration(startStr: string, endStr?: string): string {
-  if (!endStr) return '--:--';
-  const start = new Date(startStr).getTime();
-  const end = new Date(endStr).getTime();
-  const diffSec = Math.floor((end - start) / 1000);
-  const min = Math.floor(diffSec / 60);
-  const sec = diffSec % 60;
-  return `${min}:${sec.toString().padStart(2, '0')}`;
+// ─── formatting helpers ───────────────────────────────────────────
+
+function startOfDay(t: number): number {
+  const d = new Date(t);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
 }
 
-function getStatusLabel(status: string): string {
-  switch (status) {
-    case 'COMPLETED': return 'Completed';
-    case 'ENDED': return 'Ended';
-    case 'REJECTED': return 'Declined';
-    case 'CANCELLED': return 'Cancelled';
-    case 'MISSED': return 'Missed';
-    default: return status;
-  }
+function formatDay(iso: string): string {
+  const t = parseUtc(iso);
+  if (t === null) return '';
+  const days = Math.round((startOfDay(Date.now()) - startOfDay(t)) / 86_400_000);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  return new Date(t).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
 }
+
+function formatClock(iso?: string | null): string {
+  const t = parseUtc(iso);
+  return t === null ? '' : new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+function durationSeconds(call: CallResponse): number | null {
+  const a = parseUtc(call.answeredAt);
+  const e = parseUtc(call.endedAt);
+  if (a === null || e === null) return null;
+  return Math.max(0, Math.round((e - a) / 1000));
+}
+
+function formatDuration(call: CallResponse): string {
+  const total = durationSeconds(call);
+  if (total === null) return '—';
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) return `${h} hr ${m} min`;
+  if (m > 0) return `${m} min ${s.toString().padStart(2, '0')} sec`;
+  return `${s} sec`;
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  ENDED: 'Ended',
+  MISSED: 'Missed',
+  REJECTED: 'Rejected',
+  CANCELLED: 'Cancelled',
+  FAILED: 'Failed',
+  RINGING: 'Ringing',
+  ACCEPTED: 'In progress',
+};
+
+function isMissedFor(call: CallResponse, me?: number): boolean {
+  return call.status === 'MISSED' || (call.status === 'CANCELLED' && call.calleeId === me);
+}
+
+function statusTone(call: CallResponse, me?: number): 'bad' | 'ok' | 'neutral' {
+  if (isMissedFor(call, me) || call.status === 'REJECTED' || call.status === 'FAILED') return 'bad';
+  if (call.status === 'ENDED') return 'neutral';
+  return 'ok';
+}
+
+function describe(call: CallResponse, me?: number): string {
+  const kind = call.callType === 'VIDEO' ? 'video' : 'voice';
+  if (isMissedFor(call, me)) return `Missed ${kind} call`;
+  if (call.status === 'REJECTED') return `Rejected ${kind} call`;
+  if (call.status === 'CANCELLED') return `Cancelled ${kind} call`;
+  return `${call.calleeId === me ? 'Incoming' : 'Outgoing'} ${kind} call`;
+}
+
+// ─── icons ────────────────────────────────────────────────────────
+
+const svgProps = {
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 2,
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+};
+
+const PhoneIcon = ({ size = 18 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps} aria-hidden="true">
+    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.38 2 2 0 0 1 3.6 1.22h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+  </svg>
+);
+
+const VideoIcon = ({ size = 18 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps} aria-hidden="true">
+    <polygon points="23 7 16 12 23 17 23 7" />
+    <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+  </svg>
+);
+
+const ChatIcon = ({ size = 18 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps} aria-hidden="true">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+  </svg>
+);
+
+const MoreIcon = ({ size = 18 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <circle cx="5" cy="12" r="1.8" />
+    <circle cx="12" cy="12" r="1.8" />
+    <circle cx="19" cy="12" r="1.8" />
+  </svg>
+);
+
+function DirectionIcon({ call, me }: { call: CallResponse; me?: number }) {
+  const missed = isMissedFor(call, me) || call.status === 'REJECTED';
+  const incoming = call.calleeId === me;
+  const tone = missed ? 'call-dir--bad' : incoming ? 'call-dir--in' : 'call-dir--out';
+  return (
+    <span className={`call-dir ${tone}`} aria-hidden="true">
+      {call.callType === 'VIDEO' ? <VideoIcon size={14} /> : <PhoneIcon size={14} />}
+    </span>
+  );
+}
+
+// ─── page ─────────────────────────────────────────────────────────
 
 export function CallsPage() {
+  const navigate = useNavigate();
+  const me = loadAuthFromStorage().user?.id;
+
   const [calls, setCalls] = useState<CallResponse[]>([]);
+  const [users, setUsers] = useState<Map<number, UserSearchResult>>(new Map());
   const [loading, setLoading] = useState(true);
-  const [selectedCall, setSelectedCall] = useState<CallResponse | null>(null);
-  const currentUser = loadAuthFromStorage().user;
-  const currentUserId = currentUser?.id;
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasNext, setHasNext] = useState(false);
+  const [page, setPage] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<Filter>('all');
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [panelOpen, setPanelOpen] = useState(true);
+  const [menuId, setMenuId] = useState<number | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    setLoading(true);
+    let cancelled = false;
     callApi
-      .getHistory({ page: 0, size: 50 })
+      .getHistory({ page: 0, size: PAGE_SIZE })
       .then((res) => {
-        setCalls(res.content ?? []);
+        if (cancelled) return;
+        setCalls(res.calls);
+        setHasNext(res.hasNext);
+        setPage(0);
+        setSelectedId((id) => id ?? res.calls[0]?.id ?? null);
       })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+      .catch((err) => !cancelled && setError(err instanceof Error ? err.message : 'Failed to load call history'))
+      .finally(() => !cancelled && setLoading(false));
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const getOtherUser = useCallback((call: CallResponse): { id: number; name: string; username: string } => {
-    if (call.callerId === currentUserId) {
-      return { id: call.calleeId, name: call.calleeUsername, username: call.calleeUsername };
+  // People directory gives display names, avatars and online status.
+  useEffect(() => {
+    let cancelled = false;
+    const load = () =>
+      userApi
+        .list()
+        .then((list) => !cancelled && setUsers(new Map(list.map((u) => [u.id, u]))))
+        .catch(() => {});
+    void load();
+    const timer = setInterval(() => void load(), USERS_REFRESH_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (menuId === null) return;
+    const close = () => setMenuId(null);
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
+    document.addEventListener('click', close);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('click', close);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuId]);
+
+  const peerOf = useCallback(
+    (call: CallResponse): Peer => {
+      const outgoing = call.callerId === me;
+      const id = outgoing ? call.calleeId : call.callerId;
+      const username = outgoing ? call.calleeUsername : call.callerUsername;
+      const user = users.get(id);
+      return {
+        id,
+        name: user?.displayName ?? username,
+        username: user?.username ?? username,
+        avatarUrl: user?.avatarUrl,
+        online: user?.online ?? false,
+      };
+    },
+    [me, users]
+  );
+
+  const counts = useMemo(
+    () => ({
+      all: calls.length,
+      missed: calls.filter((c) => isMissedFor(c, me)).length,
+      voice: calls.filter((c) => c.callType === 'VOICE').length,
+      video: calls.filter((c) => c.callType === 'VIDEO').length,
+    }),
+    [calls, me]
+  );
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return calls.filter((c) => {
+      if (filter === 'missed' && !isMissedFor(c, me)) return false;
+      if (filter === 'voice' && c.callType !== 'VOICE') return false;
+      if (filter === 'video' && c.callType !== 'VIDEO') return false;
+      if (!q) return true;
+      const p = peerOf(c);
+      return p.name.toLowerCase().includes(q) || p.username.toLowerCase().includes(q);
+    });
+  }, [calls, filter, query, me, peerOf]);
+
+  const selected = calls.find((c) => c.id === selectedId) ?? null;
+  const selectedPeer = selected ? peerOf(selected) : null;
+  const latestWithPeer = selectedPeer ? calls.find((c) => peerOf(c).id === selectedPeer.id) ?? null : null;
+
+  const loadMore = useCallback(async () => {
+    setLoadingMore(true);
+    try {
+      const res = await callApi.getHistory({ page: page + 1, size: PAGE_SIZE });
+      setCalls((prev) => [...prev, ...res.calls.filter((c) => !prev.some((p) => p.id === c.id))]);
+      setHasNext(res.hasNext);
+      setPage(page + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load more calls');
+    } finally {
+      setLoadingMore(false);
     }
-    return { id: call.callerId, name: call.callerUsername, username: call.callerUsername };
-  }, [currentUserId]);
+  }, [page]);
 
-  const isIncoming = useCallback((call: CallResponse): boolean => {
-    return call.calleeId === currentUserId;
-  }, [currentUserId]);
+  const startCall = useCallback(
+    (call: CallResponse, callType: 'VOICE' | 'VIDEO') => {
+      const peer = peerOf(call);
+      navigate('/', {
+        state: {
+          startCall: {
+            conversationId: call.conversationId,
+            calleeId: peer.id,
+            callType,
+            peerName: peer.name,
+            peerAvatar: peer.avatarUrl,
+            nonce: Date.now(),
+          },
+        },
+      });
+    },
+    [navigate, peerOf]
+  );
 
-  const isMissedOrRejected = useCallback((call: CallResponse): boolean => {
-    return call.status === 'REJECTED' || call.status === 'CANCELLED' || call.status === 'MISSED';
+  const openChat = useCallback(
+    (call: CallResponse) => navigate('/', { state: { openConversationId: call.conversationId } }),
+    [navigate]
+  );
+
+  const copyUsername = useCallback(async (peer: Peer) => {
+    try {
+      await navigator.clipboard.writeText(`@${peer.username}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setError('Could not copy to clipboard');
+    }
   }, []);
+
+  const select = (call: CallResponse) => {
+    setSelectedId(call.id);
+    setPanelOpen(true);
+  };
+
+  const filters: { key: Filter; label: string; count: number }[] = [
+    { key: 'all', label: 'All', count: counts.all },
+    { key: 'missed', label: 'Missed', count: counts.missed },
+    { key: 'voice', label: 'Voice', count: counts.voice },
+    { key: 'video', label: 'Video', count: counts.video },
+  ];
 
   return (
     <div className="calls-page">
-      <div className="calls-page-content">
-        <div className="calls-page-header">
-          <h1 className="calls-page-title">Calls</h1>
-          <p className="calls-page-subtitle">Your call history</p>
-        </div>
+      <div className="calls-list-pane">
+        <header className="calls-header">
+          <h1 className="calls-page-title">Call History</h1>
+          <div className="calls-search-wrap">
+            <svg className="calls-search-icon" width="18" height="18" viewBox="0 0 24 24" {...svgProps} aria-hidden="true">
+              <circle cx="11" cy="11" r="8" />
+              <path d="M21 21l-4.35-4.35" />
+            </svg>
+            <input
+              type="search"
+              className="calls-search-input"
+              placeholder="Search calls by name or username..."
+              aria-label="Search calls"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+          <div className="calls-filters" role="tablist" aria-label="Filter calls">
+            {filters.map((f) => (
+              <button
+                key={f.key}
+                role="tab"
+                aria-selected={filter === f.key}
+                className={`calls-chip${filter === f.key ? ' calls-chip--active' : ''}`}
+                onClick={() => setFilter(f.key)}
+              >
+                {f.label}
+                <span className="calls-chip-count">{f.count}</span>
+              </button>
+            ))}
+          </div>
+        </header>
 
-        <div className="calls-list">
+        <div className="calls-list" role="list">
+          {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
+
           {loading ? (
             Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="call-item-skeleton">
+              <div key={i} className="call-row call-row--skeleton">
                 <Skeleton width={48} height={48} borderRadius="var(--radius-full)" />
-                <div className="call-item-skeleton-text">
-                  <Skeleton width="60%" height={16} />
-                  <Skeleton width="40%" height={12} />
+                <div className="call-row-skeleton-text">
+                  <Skeleton width="50%" height={14} />
+                  <Skeleton width="35%" height={11} />
                 </div>
               </div>
             ))
-          ) : calls.length === 0 ? (
+          ) : visible.length === 0 ? (
             <EmptyState
-              title="No call history"
-              description="Your voice call history will appear here"
-              icon={
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.38 2 2 0 0 1 3.6 1.22h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-                </svg>
+              title={calls.length === 0 ? 'No call history' : 'No calls match'}
+              description={
+                calls.length === 0
+                  ? 'Your voice and video calls will appear here'
+                  : 'Try a different search or filter'
               }
+              icon={<PhoneIcon size={48} />}
             />
           ) : (
-            calls.map((call) => {
-              const other = getOtherUser(call);
-              const incoming = isIncoming(call);
-              const missed = isMissedOrRejected(call);
+            <>
+              {visible.map((call) => {
+                const peer = peerOf(call);
+                const tone = statusTone(call, me);
+                const active = selectedId === call.id;
+                return (
+                  <div
+                    key={call.id}
+                    role="listitem"
+                    className={`call-row${active ? ' call-row--active' : ''}`}
+                  >
+                    <button className="call-row-main" onClick={() => select(call)} aria-label={`View call with ${peer.name}`}>
+                      <Avatar name={peer.name} src={peer.avatarUrl} size="lg" online={users.has(peer.id) ? peer.online : undefined} />
+                      <span className="call-row-who">
+                        <span className="call-row-name">{peer.name}</span>
+                        <span className={`call-row-kind call-row-kind--${tone}`}>
+                          <DirectionIcon call={call} me={me} />
+                          {describe(call, me)}
+                        </span>
+                      </span>
+                      <span className={`call-pill call-pill--${tone}`}>{STATUS_LABEL[call.status] ?? call.status}</span>
+                      <span className="call-row-when">
+                        <span>{formatDay(call.startedAt)}</span>
+                        <span className="call-row-clock">{formatClock(call.startedAt)}</span>
+                      </span>
+                      <span className="call-row-duration">{formatDuration(call)}</span>
+                    </button>
 
-              return (
-                <div
-                  key={call.id}
-                  className={`call-item${selectedCall?.id === call.id ? ' call-item--selected' : ''}`}
-                  onClick={() => setSelectedCall(call)}
-                >
-                  <div className="call-item-avatar">
-                    <Avatar name={other.name} size="md" />
-                    <span className={`call-item-type-badge${incoming ? ' call-item-type-badge--incoming' : ''}`}>
-                      {incoming ? (
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <polyline points="15 3 21 3 21 9" />
-                          <path d="M21 3l-9 9" />
-                          <line x1="10" y1="14" x2="3" y2="21" />
-                        </svg>
-                      ) : (
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <polyline points="9 3 3 3 3 9" />
-                          <path d="M3 3l9 9" />
-                          <line x1="14" y1="14" x2="21" y2="21" />
-                        </svg>
-                      )}
-                    </span>
-                  </div>
-                  <div className="call-item-info">
-                    <span className="call-item-name">{other.name}</span>
-                    <div className="call-item-meta">
-                      {missed ? (
-                        <span className="call-item-status call-item-status--missed">Missed</span>
-                      ) : (
-                        <span className="call-item-status">{getStatusLabel(call.status)}</span>
-                      )}
-                      {call.answeredAt && (
-                        <span className="call-item-duration">{formatDuration(call.startedAt, call.endedAt)}</span>
+                    <div className="call-row-menu-wrap">
+                      <button
+                        className="call-row-more"
+                        aria-label={`More options for call with ${peer.name}`}
+                        aria-haspopup="menu"
+                        aria-expanded={menuId === call.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMenuId((id) => (id === call.id ? null : call.id));
+                        }}
+                      >
+                        <MoreIcon />
+                      </button>
+                      {menuId === call.id && (
+                        <div className="call-row-menu" role="menu" onClick={(e) => e.stopPropagation()}>
+                          <button role="menuitem" onClick={() => { setMenuId(null); startCall(call, 'VOICE'); }}>
+                            Call again
+                          </button>
+                          <button role="menuitem" onClick={() => { setMenuId(null); startCall(call, 'VIDEO'); }}>
+                            Video call
+                          </button>
+                          <button role="menuitem" onClick={() => { setMenuId(null); openChat(call); }}>
+                            Message
+                          </button>
+                          <button role="menuitem" onClick={() => { setMenuId(null); select(call); }}>
+                            View details
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
-                  <div className="call-item-time">
-                    {formatDate(call.startedAt)}
-                  </div>
-                </div>
-              );
-            })
+                );
+              })}
+              {hasNext && (
+                <button className="calls-load-more" onClick={() => void loadMore()} disabled={loadingMore}>
+                  {loadingMore ? 'Loading...' : 'Load more'}
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
 
-      {/* Call Detail Panel */}
-      {selectedCall && (
-        <div className="calls-detail-panel">
-          <div className="calls-detail-header">
-            <Avatar name={getOtherUser(selectedCall).name} size="lg" />
-            <h2 className="calls-detail-name">{getOtherUser(selectedCall).name}</h2>
-            <span className="calls-detail-username">@{getOtherUser(selectedCall).username}</span>
-          </div>
-
-          <div className="calls-detail-info">
-            <div className="calls-detail-row">
-              <span className="calls-detail-label">Type</span>
-              <span className="calls-detail-value">{selectedCall.callType}</span>
-            </div>
-            <div className="calls-detail-row">
-              <span className="calls-detail-label">Direction</span>
-              <span className="calls-detail-value">{isIncoming(selectedCall) ? 'Incoming' : 'Outgoing'}</span>
-            </div>
-            <div className="calls-detail-row">
-              <span className="calls-detail-label">Status</span>
-              <span className="calls-detail-value">{getStatusLabel(selectedCall.status)}</span>
-            </div>
-            <div className="calls-detail-row">
-              <span className="calls-detail-label">Started</span>
-              <span className="calls-detail-value">
-                {new Date(selectedCall.startedAt).toLocaleString()}
-              </span>
-            </div>
-            {selectedCall.answeredAt && (
-              <div className="calls-detail-row">
-                <span className="calls-detail-label">Duration</span>
-                <span className="calls-detail-value">
-                  {formatDuration(selectedCall.startedAt, selectedCall.endedAt)}
-                </span>
-              </div>
-            )}
-            {selectedCall.endReason && (
-              <div className="calls-detail-row">
-                <span className="calls-detail-label">Ended because</span>
-                <span className="calls-detail-value">{selectedCall.endReason}</span>
-              </div>
-            )}
-          </div>
-
-          <button
-            className="calls-detail-close"
-            onClick={() => setSelectedCall(null)}
-          >
-            Close
+      {selected && selectedPeer && panelOpen && (
+        <aside className="calls-detail" aria-label="Call details">
+          <button className="calls-detail-close" onClick={() => setPanelOpen(false)} aria-label="Close details">
+            <svg width="18" height="18" viewBox="0 0 24 24" {...svgProps}>
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
           </button>
-        </div>
+
+          <div className="calls-detail-top">
+            <div className="calls-detail-avatar">
+              <Avatar name={selectedPeer.name} src={selectedPeer.avatarUrl} size="xl" online={users.has(selectedPeer.id) ? selectedPeer.online : undefined} />
+            </div>
+            <h2 className="calls-detail-name">{selectedPeer.name}</h2>
+            <span className={`calls-detail-presence${selectedPeer.online ? ' calls-detail-presence--on' : ''}`}>
+              <span className="calls-detail-dot" aria-hidden="true" />
+              {users.has(selectedPeer.id) ? (selectedPeer.online ? 'Online' : 'Offline') : `@${selectedPeer.username}`}
+            </span>
+          </div>
+
+          <div className="calls-detail-actions">
+            <button className="calls-act" onClick={() => startCall(selected, 'VOICE')}>
+              <span className="calls-act-circle calls-act-circle--primary"><PhoneIcon /></span>
+              <span className="calls-act-label calls-act-label--primary">Call Again</span>
+            </button>
+            <button className="calls-act" onClick={() => startCall(selected, 'VIDEO')}>
+              <span className="calls-act-circle"><VideoIcon /></span>
+              <span className="calls-act-label">Video Call</span>
+            </button>
+            <button className="calls-act" onClick={() => openChat(selected)}>
+              <span className="calls-act-circle"><ChatIcon /></span>
+              <span className="calls-act-label">Message</span>
+            </button>
+            <button className="calls-act" onClick={() => void copyUsername(selectedPeer)}>
+              <span className="calls-act-circle"><MoreIcon /></span>
+              <span className="calls-act-label">{copied ? 'Copied!' : 'Copy @user'}</span>
+            </button>
+          </div>
+
+          {latestWithPeer && (
+            <section className="calls-section">
+              <h3 className="calls-section-title">Latest Call</h3>
+              <button className="calls-latest" onClick={() => select(latestWithPeer)}>
+                <span className="calls-latest-icon">
+                  {latestWithPeer.callType === 'VIDEO' ? <VideoIcon /> : <PhoneIcon />}
+                </span>
+                <span className="calls-latest-text">
+                  <strong>{describe(latestWithPeer, me)}</strong>
+                  <span>
+                    {formatDay(latestWithPeer.startedAt)}, {formatClock(latestWithPeer.startedAt)}
+                  </span>
+                  <span>{formatDuration(latestWithPeer)}</span>
+                </span>
+                <span className={`call-pill call-pill--${statusTone(latestWithPeer, me)}`}>
+                  {STATUS_LABEL[latestWithPeer.status] ?? latestWithPeer.status}
+                </span>
+              </button>
+            </section>
+          )}
+
+          <section className="calls-section">
+            <h3 className="calls-section-title">Call Information</h3>
+            <dl className="calls-info">
+              <div>
+                <dt>Type</dt>
+                <dd>{selected.callType === 'VIDEO' ? 'Video Call' : 'Voice Call'}</dd>
+              </div>
+              <div>
+                <dt>Date</dt>
+                <dd>
+                  {parseUtc(selected.startedAt) !== null
+                    ? new Date(parseUtc(selected.startedAt) as number).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+                    : '—'}
+                </dd>
+              </div>
+              <div>
+                <dt>Time</dt>
+                <dd>
+                  {formatClock(selected.startedAt)}
+                  {selected.endedAt ? ` – ${formatClock(selected.endedAt)}` : ''}
+                </dd>
+              </div>
+              <div>
+                <dt>Duration</dt>
+                <dd>{formatDuration(selected)}</dd>
+              </div>
+              <div>
+                <dt>Direction</dt>
+                <dd>{selected.calleeId === me ? 'Incoming' : 'Outgoing'}</dd>
+              </div>
+              <div>
+                <dt>Status</dt>
+                <dd>
+                  <span className={`call-pill call-pill--${statusTone(selected, me)}`}>
+                    {STATUS_LABEL[selected.status] ?? selected.status}
+                  </span>
+                </dd>
+              </div>
+            </dl>
+          </section>
+        </aside>
       )}
     </div>
   );

@@ -27,7 +27,12 @@ interface ActiveCallInfo {
 interface CallContextValue {
   incomingCall: CallEvent | null;
   activeCall: ActiveCallInfo | null;
-  startCall: (conversationId: number, calleeId: number, callType?: CallMedia) => Promise<void>;
+  startCall: (
+    conversationId: number,
+    calleeId: number,
+    callType?: CallMedia,
+    peer?: { name?: string; avatar?: string }
+  ) => Promise<void>;
   acceptIncoming: () => Promise<void>;
   rejectIncoming: () => Promise<void>;
   endActiveCall: () => Promise<void>;
@@ -77,14 +82,19 @@ export function CallProvider({ currentUserId, getUserName, getUserAvatar, onErro
   );
 
   const startCall = useCallback(
-    async (conversationId: number, calleeId: number, callType: CallMedia = 'VOICE') => {
+    async (
+      conversationId: number,
+      calleeId: number,
+      callType: CallMedia = 'VOICE',
+      peer?: { name?: string; avatar?: string }
+    ) => {
       try {
         const call = await callApi.start(conversationId, calleeId, callType);
         setActiveCall({
           id: call.id,
           channelName: call.agoraChannelName,
-          peerName: getUserName(calleeId),
-          peerAvatar: getUserAvatar(calleeId),
+          peerName: peer?.name ?? getUserName(calleeId),
+          peerAvatar: peer?.avatar ?? getUserAvatar(calleeId),
           isInitiator: true,
           startedAt: Date.now(),
           callType,

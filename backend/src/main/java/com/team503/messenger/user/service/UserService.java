@@ -3,6 +3,7 @@ package com.team503.messenger.user.service;
 import com.team503.messenger.auth.exception.AuthException;
 import com.team503.messenger.file.exception.FileException;
 import com.team503.messenger.file.repository.StoredFileRepository;
+import com.team503.messenger.presence.service.PresenceService;
 import com.team503.messenger.user.dto.UpdateProfileRequest;
 import com.team503.messenger.user.dto.UserResponse;
 import com.team503.messenger.user.dto.UserSearchResult;
@@ -21,17 +22,20 @@ public class UserService {
     private final UserRepository userRepository;
     private final StoredFileRepository storedFileRepository;
     private final AvatarUrlResolver avatarUrlResolver;
+    private final PresenceService presenceService;
     private final Clock clock;
 
     public UserService(
             UserRepository userRepository,
             StoredFileRepository storedFileRepository,
             AvatarUrlResolver avatarUrlResolver,
+            PresenceService presenceService,
             Clock clock
     ) {
         this.userRepository = userRepository;
         this.storedFileRepository = storedFileRepository;
         this.avatarUrlResolver = avatarUrlResolver;
+        this.presenceService = presenceService;
         this.clock = clock;
     }
 
@@ -114,6 +118,10 @@ public class UserService {
     }
 
     private UserSearchResult toSearchResult(User user) {
-        return UserSearchResult.from(user, avatarUrlResolver.resolve(user.getAvatarObjectKey()));
+        return UserSearchResult.from(
+                user,
+                avatarUrlResolver.resolve(user.getAvatarObjectKey()),
+                presenceService.isOnline(user.getId())
+        );
     }
 }

@@ -2,7 +2,7 @@ import { api } from '../../../shared/api';
 import type { Conversation } from '../../../shared/types';
 
 export interface CreateDirectRequest {
-  otherUserId: number;
+  targetUserId: number;
 }
 
 export const conversationApi = {
@@ -15,7 +15,7 @@ export const conversationApi = {
   },
 
   create(otherUserId: number): Promise<Conversation> {
-    return api.post<Conversation>('/api/v1/conversations/direct', { otherUserId });
+    return api.post<Conversation>('/api/v1/conversations/direct', { targetUserId: otherUserId });
   },
 
   createDirect(data: CreateDirectRequest): Promise<Conversation> {

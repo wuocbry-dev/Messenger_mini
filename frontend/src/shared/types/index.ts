@@ -17,6 +17,10 @@ export interface UserSearchResult {
   displayName: string;
   avatarObjectKey?: string;
   avatarUrl?: string;
+  /** Currently connected (directory only). */
+  online?: boolean;
+  /** UTC timestamp without zone, as sent by the backend. */
+  lastSeenAt?: string;
 }
 
 export interface UserSummary {
@@ -147,6 +151,16 @@ export interface ApiError {
 
 export interface Paginated<T> {
   content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  hasNext: boolean;
+}
+
+/** Shape returned by GET /api/v1/calls (history). */
+export interface CallHistoryPage {
+  calls: CallResponse[];
   page: number;
   size: number;
   totalElements: number;

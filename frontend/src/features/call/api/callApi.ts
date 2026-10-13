@@ -1,5 +1,5 @@
 import { api } from '../../../shared/api';
-import type { CallResponse, CallTokenResponse, CallEvent, Paginated } from '../../../shared/types';
+import type { CallResponse, CallTokenResponse, CallHistoryPage } from '../../../shared/types';
 
 export const callApi = {
   start(
@@ -27,11 +27,11 @@ export const callApi = {
   get(callId: number): Promise<CallResponse> {
     return api.get<CallResponse>(`/api/v1/calls/${callId}`);
   },
-  getHistory(params?: { page?: number; size?: number }): Promise<Paginated<CallResponse>> {
+  getHistory(params?: { page?: number; size?: number }): Promise<CallHistoryPage> {
     const searchParams = new URLSearchParams();
     if (params?.page !== undefined) searchParams.set('page', String(params.page));
     if (params?.size !== undefined) searchParams.set('size', String(params.size));
     const query = searchParams.toString();
-    return api.get<Paginated<CallResponse>>(`/api/v1/calls${query ? `?${query}` : ''}`);
+    return api.get<CallHistoryPage>(`/api/v1/calls${query ? `?${query}` : ''}`);
   },
 };
