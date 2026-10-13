@@ -1,13 +1,33 @@
 /* SharedMediaDrawer - Media/Files panel matching reference design */
 
+/* Slides over the right edge of the chat area. */
 .shared-media-drawer {
-  width: 320px;
-  height: 100%;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  width: min(340px, 100%);
   background: var(--color-surface);
   border-left: 1px solid var(--color-border);
+  box-shadow: var(--shadow-xl);
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
+  animation: shared-drawer-in var(--transition-base) ease-out;
+}
+
+@keyframes shared-drawer-in {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.shared-media-count {
+  margin-left: 4px;
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-alpha);
+  color: var(--color-primary);
+  font-size: var(--font-size-xs);
 }
 
 .shared-media-header {
@@ -204,4 +224,11 @@
     z-index: 200;
     box-shadow: var(--shadow-xl);
   }
+}
+
+button.shared-media-item {
+  padding: 0;
+  border: none;
+  cursor: pointer;
+  overflow: hidden;
 }

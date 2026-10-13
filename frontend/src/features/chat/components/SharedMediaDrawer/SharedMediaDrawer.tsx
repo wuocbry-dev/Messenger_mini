@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { EmptyState } from '../../../../shared/components/ui/EmptyState';
 import { Skeleton } from '../../../../shared/components/ui/Skeleton';
-import type { Conversation, Message } from '../../../../shared/types';
+import type { Conversation, Message, MessageAttachment } from '../../../../shared/types';
 import { messageApi } from '../../api/messageApi';
 import './SharedMediaDrawer.css';
 
@@ -32,7 +32,7 @@ export function SharedMediaDrawer({ conversation, open, onClose }: SharedMediaDr
       .then((res) => {
         if (cancelled) return;
         const msgs = res.messages ?? res.content ?? [];
-        setMessages(msgs.reverse());
+        setMessages(msgs); // API order is newest first
       })
       .catch(console.error)
       .finally(() => {
@@ -44,24 +44,49 @@ export function SharedMediaDrawer({ conversation, open, onClose }: SharedMediaDr
     };
   }, [open, conversation?.id]);
 
-  const handleDownload = useCallback(async (fileId: number, filename: string) => {
+  // Flatten attachments (newest first); the message payload carries file ids,
+  // not URLs, so presigned URLs are fetched on demand.
+  const attachments = useMemo(
+    () =>
+      messages.flatMap((m) =>
+        (m.attachments ?? []).map((att) => ({ att, createdAt: m.createdAt, messageId: m.id }))
+      ),
+    [messages]
+  );
+  const images = useMemo(() => attachments.filter(({ att }) => isImage(att)), [attachments]);
+  const files = useMemo(() => attachments.filter(({ att }) => !isImage(att)), [attachments]);
+
+  const [urls, setUrls] = useState<Record<number, string>>({});
+  useEffect(() => {
+    const missing = Array.from(new Set(images.map(({ att }) => att.fileId))).filter((id) => !urls[id]);
+    if (!open || missing.length === 0) return;
+    let cancelled = false;
+    void Promise.all(
+      missing.map(async (id) => {
+        try {
+          return [id, (await messageApi.getFile(id)).downloadUrl] as const;
+        } catch {
+          return null;
+        }
+      })
+    ).then((entries) => {
+      if (cancelled) return;
+      const ok = entries.filter((e): e is readonly [number, string] => e != null);
+      if (ok.length) setUrls((prev) => ({ ...prev, ...Object.fromEntries(ok) }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, images, urls]);
+
+  const openFile = useCallback(async (fileId: number) => {
     try {
-      const response = await messageApi.getDownloadUrl(fileId);
-      if (response.downloadUrl) {
-        const link = document.createElement('a');
-        link.href = response.downloadUrl;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      }
+      const file = await messageApi.getFile(fileId);
+      window.open(file.downloadUrl, '_blank', 'noopener,noreferrer');
     } catch (err) {
-      console.error('Download failed:', err);
+      console.error('Open failed:', err);
     }
   }, []);
-
-  const imageMessages = messages.filter((m) => m.type === 'IMAGE');
-  const fileMessages = messages.filter((m) => m.type === 'FILE');
 
   if (!open) return null;
 
@@ -82,13 +107,13 @@ export function SharedMediaDrawer({ conversation, open, onClose }: SharedMediaDr
           className={`shared-media-tab${activeTab === 'media' ? ' shared-media-tab--active' : ''}`}
           onClick={() => setActiveTab('media')}
         >
-          Media
+          Media <span className="shared-media-count">{images.length}</span>
         </button>
         <button
           className={`shared-media-tab${activeTab === 'files' ? ' shared-media-tab--active' : ''}`}
           onClick={() => setActiveTab('files')}
         >
-          Files
+          Files <span className="shared-media-count">{files.length}</span>
         </button>
       </div>
 
@@ -100,21 +125,27 @@ export function SharedMediaDrawer({ conversation, open, onClose }: SharedMediaDr
             ))}
           </div>
         ) : activeTab === 'media' ? (
-          imageMessages.length > 0 ? (
+          images.length > 0 ? (
             <div className="shared-media-grid">
-              {imageMessages.map((msg) => (
-                <div key={msg.id} className="shared-media-item">
-                  {msg.downloadUrl ? (
+              {images.map(({ att, messageId }) => (
+                <button
+                  key={`${messageId}-${att.id ?? att.fileId}`}
+                  type="button"
+                  className="shared-media-item"
+                  onClick={() => void openFile(att.fileId)}
+                  title={att.originalName ?? 'Open image'}
+                >
+                  {urls[att.fileId] ? (
                     <img
-                      src={msg.downloadUrl}
-                      alt={msg.fileName ?? 'Shared image'}
+                      src={urls[att.fileId]}
+                      alt={att.originalName ?? 'Shared image'}
                       className="shared-media-image"
                       loading="lazy"
                     />
                   ) : (
-                    <div className="shared-media-placeholder">Image</div>
+                    <Skeleton width="100%" height="100%" borderRadius="0" />
                   )}
-                </div>
+                </button>
               ))}
             </div>
           ) : (
@@ -130,10 +161,10 @@ export function SharedMediaDrawer({ conversation, open, onClose }: SharedMediaDr
               }
             />
           )
-        ) : fileMessages.length > 0 ? (
+        ) : files.length > 0 ? (
           <div className="shared-files-list">
-            {fileMessages.map((msg) => (
-              <div key={msg.id} className="shared-file-item">
+            {files.map(({ att, createdAt, messageId }) => (
+              <div key={`${messageId}-${att.id ?? att.fileId}`} className="shared-file-item">
                 <div className="shared-file-icon">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -141,20 +172,17 @@ export function SharedMediaDrawer({ conversation, open, onClose }: SharedMediaDr
                   </svg>
                 </div>
                 <div className="shared-file-info">
-                  <span className="shared-file-name">{msg.fileName ?? 'Unknown file'}</span>
-                  {msg.fileSize && (
-                    <span className="shared-file-size">
-                      {formatFileSize(msg.fileSize)}
-                    </span>
-                  )}
+                  <span className="shared-file-name">{att.originalName ?? 'Unknown file'}</span>
+                  <span className="shared-file-size">
+                    {[att.sizeBytes ? formatFileSize(att.sizeBytes) : null, formatShortDate(createdAt)]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
                 </div>
                 <button
                   className="shared-file-download"
-                  onClick={() => {
-                    const fileId = msg.attachments?.[0]?.fileId;
-                    if (fileId) handleDownload(fileId, msg.fileName ?? 'download');
-                  }}
-                  aria-label="Download"
+                  onClick={() => void openFile(att.fileId)}
+                  aria-label={`Download ${att.originalName ?? 'file'}`}
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -186,4 +214,12 @@ function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function isImage(att: MessageAttachment): boolean {
+  return att.attachmentType === 'IMAGE' || att.mimeType?.startsWith('image/') === true;
+}
+
+function formatShortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
