@@ -60,7 +60,7 @@ export function CallProvider({ currentUserId, getUserName, getUserAvatar, onErro
   const [incomingCall, setIncomingCall] = useState<CallEvent | null>(null);
   const [activeCall, setActiveCall] = useState<ActiveCallInfo | null>(null);
   const [outgoing, setOutgoing] = useState(false);
-  const { state: agoraState, join, leave, toggleMute, toggleCamera } = useAgora();
+  const { state: agoraState, join, leave, toggleMute, toggleCamera, toggleSpeaker } = useAgora();
   const incomingCallRef = useRef<CallEvent | null>(null);
   incomingCallRef.current = incomingCall;
   const activeCallRef = useRef<ActiveCallInfo | null>(null);
@@ -234,6 +234,7 @@ export function CallProvider({ currentUserId, getUserName, getUserAvatar, onErro
           state={agoraState}
           onToggleMute={() => void toggleMute()}
           onToggleCamera={() => void toggleCamera()}
+          onToggleSpeaker={toggleSpeaker}
           onEnd={() => void endActiveCall()}
         />
       )}

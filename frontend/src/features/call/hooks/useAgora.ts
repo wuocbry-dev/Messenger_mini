@@ -10,6 +10,7 @@ import type {
   IAgoraRTCClient,
   ICameraVideoTrack,
   IMicrophoneAudioTrack,
+  IRemoteAudioTrack,
   IRemoteVideoTrack,
 } from 'agora-rtc-sdk-ng';
 
@@ -18,6 +19,7 @@ export type CallMedia = 'VOICE' | 'VIDEO';
 export interface AgoraState {
   phase: 'idle' | 'requesting' | 'joining' | 'joined' | 'ended' | 'error';
   localMuted: boolean;
+  speakerOn: boolean;
   cameraOn: boolean;
   remoteJoined: boolean;
   localVideo: ICameraVideoTrack | null;
@@ -30,6 +32,7 @@ export interface AgoraState {
 const INITIAL: AgoraState = {
   phase: 'idle',
   localMuted: false,
+  speakerOn: true,
   cameraOn: false,
   remoteJoined: false,
   localVideo: null,
@@ -41,6 +44,8 @@ export function useAgora() {
   const clientRef = useRef<IAgoraRTCClient | null>(null);
   const audioRef = useRef<IMicrophoneAudioTrack | null>(null);
   const videoRef = useRef<ICameraVideoTrack | null>(null);
+  const remoteAudioRef = useRef<IRemoteAudioTrack | null>(null);
+  const speakerOnRef = useRef(true);
   const busyRef = useRef(false);
 
   const teardown = useCallback(async () => {
@@ -49,6 +54,8 @@ export function useAgora() {
     const client = clientRef.current;
     audioRef.current = null;
     videoRef.current = null;
+    remoteAudioRef.current = null;
+    speakerOnRef.current = true;
     clientRef.current = null;
     busyRef.current = false;
     for (const track of [audio, video]) {
@@ -103,6 +110,8 @@ export function useAgora() {
         client.on('user-published', async (user, mediaType) => {
           await client.subscribe(user, mediaType);
           if (mediaType === 'audio') {
+            remoteAudioRef.current = user.audioTrack ?? null;
+            user.audioTrack?.setVolume(speakerOnRef.current ? 100 : 0);
             user.audioTrack?.play();
             setState((prev) => ({ ...prev, remoteJoined: true }));
           } else if (user.videoTrack) {
@@ -150,9 +159,17 @@ export function useAgora() {
   const toggleMute = useCallback(async () => {
     const track = audioRef.current;
     if (!track) return;
-    const muted = !track.enabled;
-    await track.setEnabled(!muted);
-    setState((prev) => ({ ...prev, localMuted: muted }));
+    // setMuted keeps the microphone device open, so unmuting is instant.
+    const nextMuted = !track.muted;
+    await track.setMuted(nextMuted);
+    setState((prev) => ({ ...prev, localMuted: nextMuted }));
+  }, []);
+
+  const toggleSpeaker = useCallback(() => {
+    const next = !speakerOnRef.current;
+    speakerOnRef.current = next;
+    remoteAudioRef.current?.setVolume(next ? 100 : 0);
+    setState((prev) => ({ ...prev, speakerOn: next }));
   }, []);
 
   const toggleCamera = useCallback(async () => {
@@ -165,5 +182,5 @@ export function useAgora() {
 
   useEffect(() => () => void teardown(), [teardown]);
 
-  return { state, join, leave, toggleMute, toggleCamera };
+  return { state, join, leave, toggleMute, toggleCamera, toggleSpeaker };
 }
