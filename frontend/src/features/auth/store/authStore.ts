@@ -38,6 +38,18 @@ export function saveAuth(token: string, user: User): void {
   sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
 }
 
+export const AUTH_USER_UPDATED_EVENT = 'auth:user-updated';
+
+/** Replace the cached user (e.g. after a profile edit) and notify listeners. */
+export function updateStoredUser(user: User): void {
+  try {
+    sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+  } catch {
+    /* storage unavailable */
+  }
+  window.dispatchEvent(new CustomEvent<User>(AUTH_USER_UPDATED_EVENT, { detail: user }));
+}
+
 export function clearAuth(): void {
   sessionStorage.removeItem(AUTH_TOKEN_KEY);
   sessionStorage.removeItem(AUTH_USER_KEY);

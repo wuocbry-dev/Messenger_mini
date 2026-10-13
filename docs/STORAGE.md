@@ -180,3 +180,18 @@ attempts to attach a file that the caller did not upload.
   the client must send; mismatches will be rejected by R2.
 - Object keys are server-generated, include a per-user prefix, and embed a
   random UUID so they cannot be guessed from the outside.
+
+### Profile avatars
+
+- The client uploads the image with the normal flow (`POST /api/v1/files`, then
+  `PUT` to the presigned URL) and saves the returned `objectKey` with
+  `PATCH /api/v1/users/me/profile` (`displayName`, `avatarObjectKey`).
+- Only the object key is stored (`users.avatar_object_key`). The backend
+  accepts a new key only if it is an **image uploaded by the same user**
+  (`INVALID_AVATAR` otherwise). A blank key removes the avatar.
+- `avatarUrl` in `UserResponse`, `UserSearchResult` and
+  `ConversationMemberResponse` is a presigned GET URL created per response
+  (`AvatarUrlResolver`); it is never persisted and expires with
+  `R2_PRESIGNED_TTL_SECONDS`. The frontend falls back to initials if it fails.
+- The R2 bucket CORS policy must allow `PUT` from the frontend origin
+  (including a dev-tunnel origin when testing through a tunnel).

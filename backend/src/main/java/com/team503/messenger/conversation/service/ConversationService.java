@@ -11,6 +11,7 @@ import com.team503.messenger.conversation.repository.ConversationMemberRepositor
 import com.team503.messenger.conversation.repository.ConversationRepository;
 import com.team503.messenger.user.entity.User;
 import com.team503.messenger.user.repository.UserRepository;
+import com.team503.messenger.user.service.AvatarUrlResolver;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -25,17 +26,20 @@ public class ConversationService {
     private final ConversationRepository conversationRepository;
     private final ConversationMemberRepository memberRepository;
     private final UserRepository userRepository;
+    private final AvatarUrlResolver avatarUrlResolver;
     private final Clock clock;
 
     public ConversationService(
             ConversationRepository conversationRepository,
             ConversationMemberRepository memberRepository,
             UserRepository userRepository,
+            AvatarUrlResolver avatarUrlResolver,
             Clock clock
     ) {
         this.conversationRepository = conversationRepository;
         this.memberRepository = memberRepository;
         this.userRepository = userRepository;
+        this.avatarUrlResolver = avatarUrlResolver;
         this.clock = clock;
     }
 
@@ -133,7 +137,8 @@ public class ConversationService {
                 .filter(m -> userMap.containsKey(m.getUserId()))
                 .map(m -> {
                     User user = userMap.get(m.getUserId());
-                    return ConversationMemberResponse.from(m, user.getUsername(), user.getDisplayName(), user.getAvatarObjectKey());
+                    return ConversationMemberResponse.from(m, user.getUsername(), user.getDisplayName(),
+                            user.getAvatarObjectKey(), avatarUrlResolver.resolve(user.getAvatarObjectKey()));
                 })
                 .toList();
 

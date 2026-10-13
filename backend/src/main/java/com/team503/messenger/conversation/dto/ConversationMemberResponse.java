@@ -8,16 +8,24 @@ public record ConversationMemberResponse(
         String username,
         String displayName,
         String avatarObjectKey,
+        String avatarUrl,
         String role,
         LocalDateTime joinedAt
 ) {
 
-    public static ConversationMemberResponse from(ConversationMember member, String username, String displayName, String avatarObjectKey) {
+    public static ConversationMemberResponse from(
+            ConversationMember member,
+            String username,
+            String displayName,
+            String avatarObjectKey,
+            String avatarUrl
+    ) {
         return new ConversationMemberResponse(
                 member.getUserId(),
                 username,
                 displayName,
                 avatarObjectKey,
+                avatarUrl,
                 member.getRole(),
                 member.getJoinedAt()
         );

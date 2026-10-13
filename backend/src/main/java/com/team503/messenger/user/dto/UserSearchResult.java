@@ -1,6 +1,6 @@
 package com.team503.messenger.user.dto;
 
-import java.util.List;
+import com.team503.messenger.user.entity.User;
 
 /**
  * Lightweight user result for user-search / new-conversation UIs.
@@ -10,15 +10,17 @@ public record UserSearchResult(
         Long id,
         String username,
         String displayName,
-        String avatarObjectKey
+        String avatarObjectKey,
+        String avatarUrl
 ) {
 
-    public static UserSearchResult from(com.team503.messenger.user.entity.User user) {
+    public static UserSearchResult from(User user, String avatarUrl) {
         return new UserSearchResult(
                 user.getId(),
                 user.getUsername(),
                 user.getDisplayName(),
-                user.getAvatarObjectKey()
+                user.getAvatarObjectKey(),
+                avatarUrl
         );
     }
 }

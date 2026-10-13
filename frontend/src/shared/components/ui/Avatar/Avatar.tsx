@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import './Avatar.css';
 
 interface AvatarProps {
@@ -41,11 +41,14 @@ function getColorFromName(name: string): string {
 export function Avatar({ src, name, size = 'md', online, className = '' }: AvatarProps) {
   const initials = getInitials(name);
   const bgColor = getColorFromName(name);
+  // Presigned avatar URLs expire; fall back to initials if the image fails.
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [src]);
 
   return (
     <div className={`avatar avatar-${size} ${className}`}>
-      {src ? (
-        <img src={src} alt={name} className="avatar-img" />
+      {src && !failed ? (
+        <img src={src} alt={name} className="avatar-img" onError={() => setFailed(true)} />
       ) : (
         <span className="avatar-initials" style={{ background: bgColor }}>
           {initials}

@@ -1,6 +1,8 @@
 package com.team503.messenger.user.service;
 
 import com.team503.messenger.auth.exception.AuthException;
+import com.team503.messenger.file.exception.FileException;
+import com.team503.messenger.file.repository.StoredFileRepository;
 import com.team503.messenger.user.dto.UpdateProfileRequest;
 import com.team503.messenger.user.dto.UserResponse;
 import com.team503.messenger.user.dto.UserSearchResult;
@@ -17,10 +19,19 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final StoredFileRepository storedFileRepository;
+    private final AvatarUrlResolver avatarUrlResolver;
     private final Clock clock;
 
-    public UserService(UserRepository userRepository, Clock clock) {
+    public UserService(
+            UserRepository userRepository,
+            StoredFileRepository storedFileRepository,
+            AvatarUrlResolver avatarUrlResolver,
+            Clock clock
+    ) {
         this.userRepository = userRepository;
+        this.storedFileRepository = storedFileRepository;
+        this.avatarUrlResolver = avatarUrlResolver;
         this.clock = clock;
     }
 
@@ -28,7 +39,7 @@ public class UserService {
     public UserResponse getCurrentUser(Long userId) {
         return userRepository.findById(userId)
                 .filter(user -> "ACTIVE".equals(user.getStatus()))
-                .map(UserResponse::from)
+                .map(this::toResponse)
                 .orElseThrow(() -> new AuthException(
                         HttpStatus.UNAUTHORIZED,
                         "CURRENT_USER_NOT_FOUND",
@@ -50,9 +61,12 @@ public class UserService {
         if (avatarObjectKey != null && avatarObjectKey.isBlank()) {
             avatarObjectKey = null;
         }
+        if (avatarObjectKey != null && !avatarObjectKey.equals(user.getAvatarObjectKey())) {
+            requireOwnImage(userId, avatarObjectKey);
+        }
 
         user.updateProfile(request.displayName(), avatarObjectKey, LocalDateTime.now(clock));
-        return UserResponse.from(user);
+        return toResponse(user);
     }
 
     /**
@@ -65,7 +79,7 @@ public class UserService {
             return List.of();
         }
         return userRepository.searchActiveUsers(query.trim()).stream()
-                .map(UserSearchResult::from)
+                .map(this::toSearchResult)
                 .toList();
     }
 
@@ -76,7 +90,30 @@ public class UserService {
     @Transactional(readOnly = true)
     public List<UserSearchResult> getAllActiveUsers(Long currentUserId) {
         return userRepository.findAllActiveUsersExcept(currentUserId).stream()
-                .map(UserSearchResult::from)
+                .map(this::toSearchResult)
                 .toList();
+    }
+
+    /** An avatar must be an image the user uploaded themselves. */
+    private void requireOwnImage(Long userId, String objectKey) {
+        boolean valid = storedFileRepository.findByObjectKey(objectKey)
+                .filter(f -> f.getUploaderId().equals(userId))
+                .filter(f -> f.getMimeType() != null && f.getMimeType().startsWith("image/"))
+                .isPresent();
+        if (!valid) {
+            throw new FileException(
+                    HttpStatus.BAD_REQUEST,
+                    "INVALID_AVATAR",
+                    "Avatar must be an image you uploaded"
+            );
+        }
+    }
+
+    private UserResponse toResponse(User user) {
+        return UserResponse.from(user, avatarUrlResolver.resolve(user.getAvatarObjectKey()));
+    }
+
+    private UserSearchResult toSearchResult(User user) {
+        return UserSearchResult.from(user, avatarUrlResolver.resolve(user.getAvatarObjectKey()));
     }
 }

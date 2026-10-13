@@ -16,6 +16,7 @@ export interface UserSearchResult {
   username: string;
   displayName: string;
   avatarObjectKey?: string;
+  avatarUrl?: string;
 }
 
 export interface UserSummary {

@@ -21,7 +21,9 @@ export interface AuthResponse {
 }
 
 export interface UpdateProfileRequest {
-  displayName?: string;
+  displayName: string;
+  /** Object key of an uploaded image; '' removes the avatar; omit to clear. Send the current key to keep it. */
+  avatarObjectKey?: string;
 }
 
 export const authApi = {
@@ -48,7 +50,7 @@ export const authApi = {
   },
 
   updateProfile(data: UpdateProfileRequest): Promise<User> {
-    return api.patch<User>('/api/v1/users/me', data);
+    return api.patch<User>('/api/v1/users/me/profile', data);
   },
 
   getCurrentUser(): User | null {

@@ -97,6 +97,7 @@
 .settings-actions {
   display: flex;
   justify-content: flex-end;
+  gap: var(--space-3);
   padding-top: var(--space-2);
 }
 
@@ -124,4 +125,21 @@
 
 .settings-avatar-upload input {
   display: none;
+}
+
+/* Avatar picker */
+.settings-avatar-input {
+  display: none;
+}
+
+.settings-avatar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.settings-avatar-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
 }
