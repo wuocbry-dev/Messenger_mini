@@ -7,7 +7,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  background: var(--color-bg);
+  background: #F6F7FD;
 }
 
 .message-row {
@@ -265,4 +265,50 @@
 @keyframes bounce {
   0%, 60%, 100% { transform: translateY(0); }
   30% { transform: translateY(-4px); }
+}
+
+/* Media bubbles: images and files sit directly on the chat background,
+   without the coloured bubble behind them. */
+.message-bubble.message-bubble--media {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  color: var(--color-text-primary);
+}
+
+.message-bubble--media .message-image-button {
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-sm);
+}
+
+.message-bubble--media .message-file {
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-xs);
+}
+
+.message-bubble--media .message-time {
+  color: var(--color-text-muted);
+}
+
+.message-bubble--media .receipt-delivered {
+  color: var(--color-text-muted);
+}
+
+/* Optional caption sent with an image keeps a normal bubble look. */
+.message-bubble--media .message-attachment > .message-content {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-2xl);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-light);
+  box-shadow: var(--shadow-sm);
+}
+
+.message-bubble--own.message-bubble--media .message-attachment > .message-content {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+  color: white;
+  border: none;
 }

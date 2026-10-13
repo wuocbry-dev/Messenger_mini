@@ -1,55 +1,94 @@
-/* ChatHeader - Chat header matching reference design */
+/* ChatHeader - avatar, name/status and call toolbar */
 
 .chat-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-4) var(--space-5);
+  padding: var(--space-3) var(--space-6);
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border-light);
-  min-height: var(--header-height);
+  min-height: 88px;
+  flex-shrink: 0;
 }
 
 .chat-header-info {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.chat-header-info .avatar-lg {
+  width: 52px;
+  height: 52px;
 }
 
 .chat-header-text {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 
 .chat-header-name {
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
   color: var(--color-text-primary);
   margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .chat-header-status {
-  font-size: var(--font-size-xs);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
   color: var(--color-text-muted);
 }
 
-.chat-header-status--typing {
-  color: var(--color-primary);
+.chat-header-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-offline);
 }
 
 .chat-header-status--online {
   color: var(--color-online);
 }
 
+.chat-header-status--online .chat-header-status-dot {
+  background: var(--color-online);
+}
+
+.chat-header-status--typing {
+  color: var(--color-primary);
+}
+
 .chat-header-actions {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
+  flex-shrink: 0;
 }
 
+.chat-header-actions button {
+  color: var(--color-text-secondary);
+}
+
+.chat-header-divider {
+  width: 1px;
+  height: 28px;
+  background: var(--color-border);
+  margin: 0 var(--space-1);
+}
+
+/* Conversation-list toggle: only needed when the list is a drawer */
 .chat-header-menu-btn {
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   width: 40px;
@@ -67,9 +106,17 @@
   color: var(--color-text-primary);
 }
 
-/* Responsive */
 @media (max-width: 768px) {
   .chat-header {
     padding: var(--space-3) var(--space-4);
+    min-height: 72px;
+  }
+
+  .chat-header-menu-btn {
+    display: flex;
+  }
+
+  .chat-header-name {
+    font-size: var(--font-size-lg);
   }
 }

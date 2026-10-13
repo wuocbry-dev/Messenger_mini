@@ -28,16 +28,6 @@ export function Sidebar({
 }: SidebarProps) {
   const [showNewConv, setShowNewConv] = useState(false);
 
-  const formatTime = (iso: string) => {
-    const d = new Date(iso);
-    const now = new Date();
-    const diffMs = now.getTime() - d.getTime();
-    const diffDays = diffMs / (1000 * 60 * 60 * 24);
-    if (diffDays < 1) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    if (diffDays < 7) return d.toLocaleDateString([], { weekday: 'short' });
-    return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-  };
-
   const getConversationName = (conv: Conversation): string => {
     if (conv.title) return conv.title;
     if (conv.directWithUser) return conv.directWithUser.displayName;
@@ -54,30 +44,24 @@ export function Sidebar({
       {open && (
         <div className="sidebar-overlay" onClick={onClose} aria-hidden="true" />
       )}
-      <div className="sidebar-header">
-        <h2 className="sidebar-title">Chats</h2>
-        <div className="sidebar-header-actions">
-          <IconButton
-            label="New conversation"
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowNewConv(true)}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-          </IconButton>
-        </div>
-      </div>
-
       <div className="sidebar-search">
         <div className="search-input-wrap">
-          <svg className="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg className="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8" />
             <path d="M21 21l-4.35-4.35" />
           </svg>
           <input className="search-input" type="search" placeholder="Search conversations..." aria-label="Search conversations" />
         </div>
+        <IconButton
+          label="New conversation"
+          variant="ghost"
+          size="md"
+          onClick={() => setShowNewConv(true)}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </IconButton>
       </div>
 
       <div className="conversation-list" role="list">
@@ -120,33 +104,26 @@ export function Sidebar({
               >
                 <Avatar
                   name={getConversationName(conv)}
-                  src={conv.avatarUrl}
-                  size="md"
+                  src={otherUser?.avatarUrl ?? conv.avatarUrl}
+                  size="lg"
                   online={otherUser ? isOnline : undefined}
                 />
                 <div className="conversation-item-body">
-                  <div className="conversation-item-row">
-                    <span className="conversation-item-name truncate">
-                      {getConversationName(conv)}
-                    </span>
-                    {conv.lastMessageAt && (
-                      <span className="conversation-item-time">
-                        {formatTime(conv.lastMessageAt)}
-                      </span>
-                    )}
-                  </div>
-                  <div className="conversation-item-row">
+                  <span className="conversation-item-name truncate">
+                    {getConversationName(conv)}
+                  </span>
+                  {conv.lastMessage && (
                     <span className="conversation-item-preview truncate">
-                      {conv.lastMessage?.content ??
-                        (conv.lastMessage?.type === 'IMAGE' ? '📷 Image' : '')}
+                      {conv.lastMessage.content ??
+                        (conv.lastMessage.type === 'IMAGE' ? '📷 Image' : 'Attachment')}
                     </span>
-                    {unread > 0 && (
-                      <Badge variant="primary" size="sm">
-                        {unread > 99 ? '99+' : unread}
-                      </Badge>
-                    )}
-                  </div>
+                  )}
                 </div>
+                {unread > 0 && (
+                  <Badge variant="primary" size="sm">
+                    {unread > 99 ? '99+' : unread}
+                  </Badge>
+                )}
               </div>
             );
           })

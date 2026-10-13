@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useContext } from 'react';
+import { createPortal } from 'react-dom';
+import { SidebarSlotContext } from '../../../../app/SidebarSlot';
 import type { Conversation, Message, TypingIndicator, MessageReceipt } from '../../../../shared/types';
 import { Sidebar } from '../Sidebar';
 import { ChatHeader } from '../ChatHeader';
@@ -43,6 +45,7 @@ export function ChatPanel({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const typingTimeout = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   const { startCall, activeCall } = useCall();
+  const slot = useContext(SidebarSlotContext);
   const [mediaDrawerOpen, setMediaDrawerOpen] = useState(false);
 
   // Load messages when active conversation changes
@@ -208,7 +211,8 @@ export function ChatPanel({
 
   const otherUser = activeConversation?.directWithUser;
   const otherUserId = otherUser?.id;
-  const typingUser = otherUserId ? typingUsers.get(otherUserId) : undefined;
+  // typingUsers holds login handles (often emails); show the display name instead.
+  const typingUser = otherUserId && typingUsers.has(otherUserId) ? getUserName(otherUserId) : undefined;
   const otherUserName = otherUser ? getUserName(otherUser.id) : undefined;
   const otherUserAvatar = otherUser ? getUserAvatar(otherUser.id) : undefined;
 
@@ -224,9 +228,8 @@ export function ChatPanel({
     }
   }, [otherUserId, activeConversation, startCall]);
 
-  return (
-    <div className={`chat-panel ${activeConversation ? 'chat-panel--has-active' : ''}`}>
-      <Sidebar
+  const sidebarEl = (
+    <Sidebar
         currentUserId={currentUserId}
         conversations={conversations}
         activeConversationId={activeConversation?.id ?? null}
@@ -237,6 +240,11 @@ export function ChatPanel({
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />
+  );
+
+  return (
+    <div className={`chat-panel ${activeConversation ? 'chat-panel--has-active' : ''}`}>
+      {slot ? createPortal(sidebarEl, slot) : sidebarEl}
 
       <main className="chat-main">
         {activeConversation ? (
@@ -259,7 +267,9 @@ export function ChatPanel({
               messages={messages}
               currentUserId={currentUserId}
               typingUser={typingUser}
+              typingUserAvatar={otherUserAvatar}
               loading={messagesLoading}
+              getUserAvatar={getUserAvatar}
             />
             <MessageInput
               conversationId={activeConversation.id}

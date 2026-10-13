@@ -97,18 +97,49 @@ export function MessengerPage() {
     };
   }, [addToast, navigate]);
 
-  // Load conversations
+  // Load conversations. Refreshes (triggered by every incoming/sent message)
+  // are silent: no skeleton, details are cached, and live fields set by the
+  // realtime handlers (last message, unread count) are carried over.
+  const detailCache = useRef<Map<number, { conv: Conversation; at: number }>>(new Map());
+  const loadedOnce = useRef(false);
+  const DETAIL_TTL_MS = 10 * 60 * 1000; // avatar URLs are presigned and expire
+
   const loadConversations = useCallback(() => {
     if (!user) return;
-    setConvLoading(true);
+    if (!loadedOnce.current) setConvLoading(true);
     conversationApi
       .list()
       .then(async (items) => {
+        const now = Date.now();
         const details = await Promise.all(
-          items.map((item) => conversationApi.get(item.id).catch(() => item))
+          items.map(async (item) => {
+            const hit = detailCache.current.get(item.id);
+            if (hit && now - hit.at < DETAIL_TTL_MS) {
+              return { ...hit.conv, updatedAt: item.updatedAt, title: item.title ?? hit.conv.title };
+            }
+            const detail = await conversationApi.get(item.id).catch(() => item);
+            const normalizedDetail = normalizeConversation(detail);
+            if (normalizedDetail.members) {
+              detailCache.current.set(item.id, { conv: normalizedDetail, at: now });
+            }
+            return normalizedDetail;
+          })
         );
         const normalized = details.map(normalizeConversation);
-        setConversations(normalized);
+        setConversations((prev) => {
+          const live = new Map(prev.map((c) => [c.id, c]));
+          return normalized.map((c) => {
+            const old = live.get(c.id);
+            return old
+              ? {
+                  ...c,
+                  lastMessage: old.lastMessage ?? c.lastMessage,
+                  lastMessageAt: old.lastMessageAt ?? c.lastMessageAt,
+                  unreadCount: old.unreadCount ?? c.unreadCount,
+                }
+              : c;
+          });
+        });
         normalized.forEach((c) => {
           if (c.directWithUser) {
             userMapRef.current.set(c.directWithUser.id, {
@@ -118,6 +149,7 @@ export function MessengerPage() {
             });
           }
         });
+        loadedOnce.current = true;
       })
       .catch((err) => addToast('error', err.message ?? 'Failed to load conversations'))
       .finally(() => setConvLoading(false));
@@ -149,10 +181,13 @@ export function MessengerPage() {
   const handleTypingEvent = useCallback((payload: unknown) => {
     const t = payload as TypingIndicator;
     if (t?.senderId) {
+      // senderUsername is the login handle (often the email), not the display
+      // name. Never overwrite a known display name with it.
+      const known = userMapRef.current.get(t.senderId);
       userMapRef.current.set(t.senderId, {
-        ...(userMapRef.current.get(t.senderId) ?? { displayName: t.senderUsername }),
-        displayName: t.senderUsername,
-        username: t.senderUsername,
+        ...known,
+        displayName: known?.displayName ?? t.senderUsername,
+        username: known?.username ?? t.senderUsername,
       });
     }
   }, []);

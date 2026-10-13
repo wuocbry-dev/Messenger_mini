@@ -8,7 +8,10 @@ interface MessageListProps {
   messages: Message[];
   currentUserId: number;
   typingUser?: string;
+  typingUserAvatar?: string;
   loading: boolean;
+  /** Resolves a user's avatar URL; the message payload does not carry one. */
+  getUserAvatar?: (userId: number) => string | undefined;
 }
 
 function formatTime(iso: string): string {
@@ -61,7 +64,7 @@ function ReceiptIcon({ receipt }: { receipt: MessageReceipt }) {
   );
 }
 
-export function MessageList({ messages, currentUserId, typingUser, loading }: MessageListProps) {
+export function MessageList({ messages, currentUserId, typingUser, typingUserAvatar, loading, getUserAvatar }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [fileUrls, setFileUrls] = useState<Record<number, string>>({});
 
@@ -160,7 +163,7 @@ export function MessageList({ messages, currentUserId, typingUser, loading }: Me
               {!isOwn && (
                 <Avatar
                   name={msg.senderDisplayName}
-                  src={msg.senderAvatarUrl}
+                  src={msg.senderAvatarUrl ?? getUserAvatar?.(msg.senderId)}
                   size="sm"
                 />
               )}
@@ -246,7 +249,7 @@ export function MessageList({ messages, currentUserId, typingUser, loading }: Me
 
       {typingUser && (
         <div className="typing-indicator" aria-live="polite">
-          <Avatar name={typingUser} size="sm" />
+          <Avatar name={typingUser} src={typingUserAvatar} size="sm" />
           <div className="typing-dots">
             <span /><span /><span />
           </div>

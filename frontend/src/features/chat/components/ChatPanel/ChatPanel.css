@@ -1,11 +1,10 @@
-/* ChatPanel - Main chat interface matching reference design */
+/* ChatPanel - chat area inside the right card */
 
 .chat-panel {
   display: flex;
   flex: 1;
-  height: 100%;
+  min-height: 0;
   overflow: hidden;
-  background: var(--color-bg);
 }
 
 .chat-main {

@@ -43,16 +43,21 @@ export function ChatHeader({
         <Avatar
           name={name}
           src={otherUserAvatar ?? conversation.avatarUrl}
-          size="md"
+          size="lg"
           online={otherUserId != null ? online : undefined}
         />
         <div className="chat-header-text">
           <h3 className="chat-header-name">{name}</h3>
-          <span className={`chat-header-status${typing ? ' chat-header-status--typing' : ''}`}>
+          <span
+            className={`chat-header-status${typing ? ' chat-header-status--typing' : ''}${
+              otherUserId != null && online && !typing ? ' chat-header-status--online' : ''
+            }`}
+          >
+            {otherUserId != null && !typing && <span className="chat-header-status-dot" aria-hidden="true" />}
             {typing
               ? 'typing...'
               : otherUserId != null
-              ? (online ? 'online' : 'offline')
+              ? (online ? 'Online' : 'Offline')
               : `${conversation.type.toLowerCase()} conversation`}
           </span>
         </div>
@@ -65,7 +70,7 @@ export function ChatHeader({
             size="md"
             onClick={onCallClick}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.38 2 2 0 0 1 3.6 1.22h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
             </svg>
           </IconButton>
@@ -77,25 +82,28 @@ export function ChatHeader({
             size="md"
             onClick={onVideoCallClick}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polygon points="23 7 16 12 23 17 23 7" />
               <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
             </svg>
           </IconButton>
         )}
         {onMediaClick && (
-          <IconButton
-            label="Shared media"
-            variant="ghost"
-            size="md"
-            onClick={onMediaClick}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-              <polyline points="21 15 16 10 5 21" />
-            </svg>
-          </IconButton>
+          <>
+            <span className="chat-header-divider" aria-hidden="true" />
+            <IconButton
+              label="More options"
+              variant="ghost"
+              size="md"
+              onClick={onMediaClick}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                <circle cx="5" cy="12" r="1.8" />
+                <circle cx="12" cy="12" r="1.8" />
+                <circle cx="19" cy="12" r="1.8" />
+              </svg>
+            </IconButton>
+          </>
         )}
         <button
           className="chat-header-menu-btn"
