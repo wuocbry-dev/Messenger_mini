@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { ICameraVideoTrack, IRemoteVideoTrack } from 'agora-rtc-sdk-ng';
+import type { ILocalVideoTrack, IRemoteVideoTrack } from 'agora-rtc-sdk-ng';
 import { Avatar } from '../../../../shared/components/ui';
 import type { AgoraState } from '../../hooks/useAgora';
 import './ActiveCall.css';
@@ -15,6 +15,9 @@ interface ActiveCallProps {
   onToggleMute: () => void;
   onToggleCamera: () => void;
   onToggleSpeaker: () => void;
+  onToggleShare: () => void;
+  listCameras: () => Promise<{ id: string; label: string }[]>;
+  onSwitchCamera: (deviceId: string) => void;
   onEnd: () => void;
 }
 
@@ -32,7 +35,7 @@ function VideoView({
   track,
   className,
 }: {
-  track: ICameraVideoTrack | IRemoteVideoTrack | null;
+  track: ILocalVideoTrack | IRemoteVideoTrack | null;
   className: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -72,6 +75,24 @@ const SpeakerIcon = ({ off }: { off: boolean }) => (
   </svg>
 );
 
+const CameraIcon = ({ off }: { off: boolean }) => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <polygon points="23 7 16 12 23 17 23 7" />
+    <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+    {off && <line x1="1" y1="1" x2="23" y2="23" />}
+  </svg>
+);
+
+const FullscreenIcon = ({ exit }: { exit: boolean }) => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    {exit ? (
+      <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
+    ) : (
+      <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+    )}
+  </svg>
+);
+
 const EndIcon = () => (
   <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.38 2 2 0 0 1 3.6 1.22h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" transform="rotate(135 12 12)" />
@@ -88,10 +109,35 @@ export function ActiveCall({
   onToggleMute,
   onToggleCamera,
   onToggleSpeaker,
+  onToggleShare,
+  listCameras,
+  onSwitchCamera,
   onEnd,
 }: ActiveCallProps) {
   const [elapsed, setElapsed] = useState(0);
   const [minimized, setMinimized] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [cameras, setCameras] = useState<{ id: string; label: string }[]>([]);
+  const [fullscreen, setFullscreen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onChange = () => setFullscreen(document.fullscreenElement === rootRef.current);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onChange);
+      if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+    };
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+    else void rootRef.current?.requestFullscreen().catch(() => {});
+  };
+
+  useEffect(() => {
+    if (settingsOpen) void listCameras().then(setCameras);
+  }, [settingsOpen, listCameras]);
 
   useEffect(() => {
     if (!state.remoteJoined || connectedAt === null) {
@@ -114,71 +160,10 @@ export function ActiveCall({
 
   const connected = state.remoteJoined;
 
-  /* ── Video call: stage layout ─────────────────────────────── */
-  if (video) {
-    return (
-      <div className="active-call active-call--video" role="dialog" aria-label="Video call">
-        <div className="active-call-card animate-fade-in">
-          <div className="active-call-stage">
-            {state.remoteVideo ? (
-              <VideoView track={state.remoteVideo} className="active-call-remote-video" />
-            ) : (
-              <div className="active-call-stage-placeholder">
-                <Avatar name={peerName} src={peerAvatar} size="lg" />
-              </div>
-            )}
-            {state.cameraOn && state.localVideo && (
-              <VideoView track={state.localVideo} className="active-call-local-video" />
-            )}
-            <div className="active-call-stage-info">
-              <h2 className="active-call-name">{peerName}</h2>
-              <span className="active-call-status" aria-live="polite">{statusLabel}</span>
-            </div>
-          </div>
-
-          {state.notice && <p className="active-call-notice" role="status">{state.notice}</p>}
-
-          <div className="call-controls call-controls--inline">
-            <button
-              className={`call-ctl${state.localMuted ? ' call-ctl--off' : ''}`}
-              onClick={onToggleMute}
-              aria-label={state.localMuted ? 'Unmute microphone' : 'Mute microphone'}
-              aria-pressed={state.localMuted}
-            >
-              <span className="call-ctl-circle"><MicIcon off={state.localMuted} /></span>
-              <span className="call-ctl-label">{state.localMuted ? 'Unmute' : 'Mute'}</span>
-            </button>
-            {state.localVideo !== null && (
-              <button
-                className={`call-ctl${!state.cameraOn ? ' call-ctl--off' : ''}`}
-                onClick={onToggleCamera}
-                aria-label={state.cameraOn ? 'Turn camera off' : 'Turn camera on'}
-                aria-pressed={!state.cameraOn}
-              >
-                <span className="call-ctl-circle">
-                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <polygon points="23 7 16 12 23 17 23 7" />
-                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-                    {!state.cameraOn && <line x1="1" y1="1" x2="23" y2="23" />}
-                  </svg>
-                </span>
-                <span className="call-ctl-label">{state.cameraOn ? 'Camera' : 'Camera off'}</span>
-              </button>
-            )}
-            <button className="call-ctl call-ctl--end" onClick={onEnd} aria-label="End call">
-              <span className="call-ctl-circle"><EndIcon /></span>
-              <span className="call-ctl-label">End Call</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  /* ── Voice call: minimized pill ───────────────────────────── */
+  /* ── Minimized pill (voice and video) ───────────────────────────── */
   if (minimized) {
     return (
-      <div className="active-call active-call--mini" role="dialog" aria-label="Voice call (minimized)">
+      <div className="active-call active-call--mini" role="dialog" aria-label="Call (minimized)">
         <button className="call-mini-main" onClick={() => setMinimized(false)} aria-label="Expand call">
           <Avatar name={peerName} src={peerAvatar} size="sm" />
           <span className="call-mini-text">
@@ -189,6 +174,160 @@ export function ActiveCall({
         <button className="call-mini-end" onClick={onEnd} aria-label="End call">
           <EndIcon />
         </button>
+      </div>
+    );
+  }
+
+  /* ── Video call: stage layout ─────────────────────────────── */
+  if (video) {
+    const sharing = state.sharing;
+    return (
+      <div
+        ref={rootRef}
+        className={`active-call active-call--video${connected ? ' active-call--video-full' : ''}`}
+        role="dialog"
+        aria-label="Video call"
+      >
+        <div className="vcall animate-fade-in">
+          <div className="vcall-stage">
+            {state.remoteVideo ? (
+              <VideoView track={state.remoteVideo} className="vcall-remote" />
+            ) : (
+              <div className="vcall-placeholder">
+                <Avatar name={peerName} src={peerAvatar} size="xl" />
+                {connected && <span className="vcall-placeholder-note">Camera is off</span>}
+              </div>
+            )}
+
+            <header className="vcall-top">
+              <div className="vcall-peer">
+                <Avatar name={peerName} src={peerAvatar} size="md" />
+                <div className="vcall-peer-text">
+                  <span className="vcall-peer-name">{peerName}</span>
+                  <span className={`vcall-peer-status${connected ? ' vcall-peer-status--on' : ''}`}>
+                    <span className="vcall-dot" aria-hidden="true" />
+                    {connected ? 'Online' : ringing ? 'Calling' : 'Connecting'}
+                  </span>
+                </div>
+                <span className="vcall-timer" aria-live="polite">{statusLabel}</span>
+              </div>
+              <div className="vcall-top-actions">
+                <button className="vcall-icon-btn" onClick={() => setMinimized(true)} aria-label="Minimize call" title="Minimize">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                </button>
+                <button className="vcall-icon-btn" onClick={toggleFullscreen} aria-label={fullscreen ? 'Exit full screen' : 'Full screen'} title="Full screen">
+                  <FullscreenIcon exit={fullscreen} />
+                </button>
+              </div>
+            </header>
+
+            {state.localVideo && (state.cameraOn || sharing) && (
+              <VideoView track={state.localVideo} className={`vcall-local${sharing ? ' vcall-local--screen' : ''}`} />
+            )}
+
+            {state.notice && <p className="vcall-notice" role="status">{state.notice}</p>}
+
+            {settingsOpen && (
+              <div className="vcall-settings" role="menu">
+                <div className="vcall-settings-row">
+                  <span>Speaker</span>
+                  <button
+                    className={`vcall-switch${state.speakerOn ? ' vcall-switch--on' : ''}`}
+                    onClick={onToggleSpeaker}
+                    role="switch"
+                    aria-checked={state.speakerOn}
+                    aria-label="Speaker"
+                  >
+                    <span />
+                  </button>
+                </div>
+                {cameras.length > 1 && (
+                  <label className="vcall-settings-row vcall-settings-row--col">
+                    <span>Camera</span>
+                    <select onChange={(e) => onSwitchCamera(e.target.value)} defaultValue="">
+                      <option value="" disabled>Choose camera...</option>
+                      {cameras.map((c) => (
+                        <option key={c.id} value={c.id}>{c.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </div>
+            )}
+
+            <div className="vcall-bar">
+              <button
+                className={`vcall-ctl${state.localMuted ? ' vcall-ctl--off' : ''}`}
+                onClick={onToggleMute}
+                aria-pressed={state.localMuted}
+                aria-label={state.localMuted ? 'Unmute microphone' : 'Mute microphone'}
+              >
+                <span className="vcall-ctl-circle"><MicIcon off={state.localMuted} /></span>
+                <span className="vcall-ctl-label">{state.localMuted ? 'Unmute' : 'Mute'}</span>
+              </button>
+              {state.localVideo !== null && (
+                <button
+                  className={`vcall-ctl${!state.cameraOn ? ' vcall-ctl--off' : ''}`}
+                  onClick={onToggleCamera}
+                  disabled={sharing}
+                  aria-pressed={!state.cameraOn}
+                  aria-label={state.cameraOn ? 'Stop video' : 'Start video'}
+                >
+                  <span className="vcall-ctl-circle"><CameraIcon off={!state.cameraOn} /></span>
+                  <span className="vcall-ctl-label">{state.cameraOn ? 'Stop Video' : 'Start Video'}</span>
+                </button>
+              )}
+              <button
+                className={`vcall-ctl${sharing ? ' vcall-ctl--active' : ''}`}
+                onClick={onToggleShare}
+                disabled={!connected}
+                aria-pressed={sharing}
+                aria-label={sharing ? 'Stop sharing' : 'Share screen'}
+              >
+                <span className="vcall-ctl-circle">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="3" y="4" width="18" height="14" rx="2" />
+                    <polyline points="9 10 12 7 15 10" />
+                    <line x1="12" y1="7" x2="12" y2="14" />
+                    <line x1="8" y1="21" x2="16" y2="21" />
+                  </svg>
+                </span>
+                <span className="vcall-ctl-label">{sharing ? 'Stop Share' : 'Share'}</span>
+              </button>
+              <button className="vcall-ctl" onClick={() => setMinimized(true)} aria-label="Back to chat">
+                <span className="vcall-ctl-circle">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                  </svg>
+                </span>
+                <span className="vcall-ctl-label">Chat</span>
+              </button>
+              <button
+                className={`vcall-ctl${settingsOpen ? ' vcall-ctl--active' : ''}`}
+                onClick={() => setSettingsOpen((o) => !o)}
+                aria-expanded={settingsOpen}
+                aria-label="Call settings"
+              >
+                <span className="vcall-ctl-circle">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                  </svg>
+                </span>
+                <span className="vcall-ctl-label">Settings</span>
+              </button>
+              <button className="vcall-ctl" onClick={toggleFullscreen} aria-label={fullscreen ? 'Exit full screen' : 'Full screen'}>
+                <span className="vcall-ctl-circle"><FullscreenIcon exit={fullscreen} /></span>
+                <span className="vcall-ctl-label">Fullscreen</span>
+              </button>
+              <span className="vcall-sep" aria-hidden="true" />
+              <button className="vcall-ctl vcall-ctl--end" onClick={onEnd} aria-label="End call">
+                <span className="vcall-ctl-circle"><EndIcon /></span>
+                <span className="vcall-ctl-label">End Call</span>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
