@@ -38,6 +38,7 @@ public class DefaultAgoraTokenService implements AgoraTokenService {
     private static final int SERVICE_TYPE_RTC = 1;
     private static final int PRIVILEGE_JOIN_CHANNEL = 1;
     private static final int PRIVILEGE_PUBLISH_AUDIO = 2;
+    private static final int PRIVILEGE_PUBLISH_VIDEO = 3;
 
     private final AgoraProperties properties;
     private final Clock clock;
@@ -69,6 +70,7 @@ public class DefaultAgoraTokenService implements AgoraTokenService {
         Map<Integer, Integer> privileges = new TreeMap<>();
         privileges.put(PRIVILEGE_JOIN_CHANNEL, ttl);
         privileges.put(PRIVILEGE_PUBLISH_AUDIO, ttl);
+        privileges.put(PRIVILEGE_PUBLISH_VIDEO, ttl);
 
         ByteArrayOutputStream service = new ByteArrayOutputStream();
         writeUInt16(service, SERVICE_TYPE_RTC);

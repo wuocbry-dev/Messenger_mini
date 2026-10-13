@@ -1,6 +1,7 @@
 # Voice Call
 
-The approved initial voice-call scope is 1-to-1 voice call. Video call is a future optional extension.
+Calls are 1-to-1 and come in two types: `VOICE` and `VIDEO`. Both use the same
+lifecycle, endpoints, channel and token; only the media the client publishes differs.
 
 Messenger Mini uses Agora RTC for realtime media transport.
 
@@ -62,7 +63,7 @@ service rejects any state transition out of a terminal state.
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/api/v1/calls` | Start a call (caller, conversation, callee). |
+| `POST` | `/api/v1/calls` | Start a call. Body: `conversationId`, `calleeId`, optional `callType` (`VOICE` default, or `VIDEO`). |
 | `POST` | `/api/v1/calls/{id}/accept` | Callee accepts. |
 | `POST` | `/api/v1/calls/{id}/reject` | Callee rejects. |
 | `POST` | `/api/v1/calls/{id}/cancel` | Caller cancels while still ringing. |
@@ -162,7 +163,16 @@ AGORA_RING_TIMEOUT_SECONDS (default 45)
 ## Out of scope for task 009
 
 - Call history retention policy.
-- Video call. The `CallType.VIDEO` enum value exists for future
-  compatibility; the `startCall` flow currently only allows `VOICE`.
 - Group calls. The current implementation is 1-to-1 only and enforces
   exactly two participants.
+
+## Video calls
+
+- `callType` is stored on the call and carried in every `CallEvent`, so the
+  callee's incoming prompt and the join logic know whether to publish video.
+- The RTC token always grants join, publish-audio and publish-video
+  privileges; the call type is not enforced by the token.
+- Frontend: a `VIDEO` call creates a camera track in addition to the
+  microphone. If the camera is unavailable the call continues audio-only with
+  a notice. The camera can be toggled during the call.
+- Media still flows through Agora only; Spring Boot never proxies it.

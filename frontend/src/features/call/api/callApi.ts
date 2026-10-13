@@ -2,8 +2,12 @@ import { api } from '../../../shared/api';
 import type { CallResponse, CallTokenResponse, CallEvent, Paginated } from '../../../shared/types';
 
 export const callApi = {
-  start(conversationId: number, calleeId: number): Promise<CallResponse> {
-    return api.post<CallResponse>('/api/v1/calls', { conversationId, calleeId });
+  start(
+    conversationId: number,
+    calleeId: number,
+    callType: 'VOICE' | 'VIDEO' = 'VOICE',
+  ): Promise<CallResponse> {
+    return api.post<CallResponse>('/api/v1/calls', { conversationId, calleeId, callType });
   },
   accept(callId: number): Promise<CallResponse> {
     return api.post<CallResponse>(`/api/v1/calls/${callId}/accept`);

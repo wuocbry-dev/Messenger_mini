@@ -52,10 +52,12 @@ class DefaultAgoraTokenServiceTest {
         assertThat(buf.getShort()).isEqualTo((short) 1);
 
         assertThat(buf.getShort()).isEqualTo((short) 1);   // RTC service
-        assertThat(buf.getShort()).isEqualTo((short) 2);   // two privileges
+        assertThat(buf.getShort()).isEqualTo((short) 3);   // three privileges
         assertThat(buf.getShort()).isEqualTo((short) 1);   // join channel
         assertThat(buf.getInt()).isEqualTo(600);
         assertThat(buf.getShort()).isEqualTo((short) 2);   // publish audio
+        assertThat(buf.getInt()).isEqualTo(600);
+        assertThat(buf.getShort()).isEqualTo((short) 3);   // publish video
         assertThat(buf.getInt()).isEqualTo(600);
         assertThat(readString(buf)).isEqualTo("call-1-abc");
         assertThat(readString(buf)).isEqualTo("42");

@@ -10,7 +10,7 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
 import type { CallEvent } from '../../../../shared/types';
 import { callApi } from '../../api/callApi';
-import { useAgora } from '../../hooks/useAgora';
+import { useAgora, type CallMedia } from '../../hooks/useAgora';
 import { IncomingCallModal } from '../CallModal';
 import { ActiveCall } from '../ActiveCall';
 
@@ -21,12 +21,13 @@ interface ActiveCallInfo {
   peerAvatar?: string;
   isInitiator: boolean;
   startedAt: number;
+  callType: CallMedia;
 }
 
 interface CallContextValue {
   incomingCall: CallEvent | null;
   activeCall: ActiveCallInfo | null;
-  startCall: (conversationId: number, calleeId: number) => Promise<void>;
+  startCall: (conversationId: number, calleeId: number, callType?: CallMedia) => Promise<void>;
   acceptIncoming: () => Promise<void>;
   rejectIncoming: () => Promise<void>;
   endActiveCall: () => Promise<void>;
@@ -59,7 +60,7 @@ export function CallProvider({ currentUserId, getUserName, getUserAvatar, onErro
   const [incomingCall, setIncomingCall] = useState<CallEvent | null>(null);
   const [activeCall, setActiveCall] = useState<ActiveCallInfo | null>(null);
   const [outgoing, setOutgoing] = useState(false);
-  const { state: agoraState, join, leave, toggleMute } = useAgora();
+  const { state: agoraState, join, leave, toggleMute, toggleCamera } = useAgora();
   const incomingCallRef = useRef<CallEvent | null>(null);
   incomingCallRef.current = incomingCall;
   const activeCallRef = useRef<ActiveCallInfo | null>(null);
@@ -76,9 +77,9 @@ export function CallProvider({ currentUserId, getUserName, getUserAvatar, onErro
   );
 
   const startCall = useCallback(
-    async (conversationId: number, calleeId: number) => {
+    async (conversationId: number, calleeId: number, callType: CallMedia = 'VOICE') => {
       try {
-        const call = await callApi.start(conversationId, calleeId);
+        const call = await callApi.start(conversationId, calleeId, callType);
         setActiveCall({
           id: call.id,
           channelName: call.agoraChannelName,
@@ -86,10 +87,11 @@ export function CallProvider({ currentUserId, getUserName, getUserAvatar, onErro
           peerAvatar: getUserAvatar(calleeId),
           isInitiator: true,
           startedAt: Date.now(),
+          callType,
         });
         setOutgoing(true);
         const token = await callApi.getToken(call.id);
-        await join(token.appId, token.agoraChannelName, token.uid, token.token);
+        await join(token.appId, token.agoraChannelName, token.uid, token.token, callType);
       } catch (err) {
         handleError(err);
         setActiveCall(null);
@@ -168,11 +170,12 @@ export function CallProvider({ currentUserId, getUserName, getUserAvatar, onErro
               peerAvatar: getUserAvatar(event.callerId),
               isInitiator: false,
               startedAt: Date.now(),
+              callType: event.callType,
             });
             callApi
               .getToken(event.callId)
               .then((token) =>
-                join(token.appId, token.agoraChannelName, token.uid, token.token)
+                join(token.appId, token.agoraChannelName, token.uid, token.token, event.callType)
               )
               .catch(handleError);
           }
@@ -225,10 +228,12 @@ export function CallProvider({ currentUserId, getUserName, getUserAvatar, onErro
         <ActiveCall
           peerName={activeCall.peerName}
           peerAvatar={activeCall.peerAvatar}
+          video={activeCall.callType === 'VIDEO'}
           connectedAt={connectedAt}
           ringing={outgoing}
           state={agoraState}
           onToggleMute={() => void toggleMute()}
+          onToggleCamera={() => void toggleCamera()}
           onEnd={() => void endActiveCall()}
         />
       )}

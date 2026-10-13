@@ -70,7 +70,7 @@ public class CallService {
     }
 
     @Transactional
-    public CallResponse startCall(Long callerId, Long conversationId, Long calleeId) {
+    public CallResponse startCall(Long callerId, Long conversationId, Long calleeId, Call.CallType callType) {
         if (callerId.equals(calleeId)) {
             throw new CallException(HttpStatus.BAD_REQUEST, "CALLER_AND_CALLEE_MUST_DIFFER",
                     "Caller and callee must be different users");
@@ -97,7 +97,7 @@ public class CallService {
                 conversationId,
                 callerId,
                 calleeId,
-                Call.CallType.VOICE,
+                callType,
                 AgoraChannelNameGenerator.generate(conversationId),
                 LocalDateTime.now(clock)
         ));

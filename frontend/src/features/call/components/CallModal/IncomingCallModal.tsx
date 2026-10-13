@@ -23,14 +23,16 @@ export function IncomingCallModal({ call, onAccept, onReject, callerName, caller
     setRinging(false);
   }, [call?.callId, call?.type]);
 
+  const kind = call?.callType === 'VIDEO' ? 'Video' : 'Voice';
+
   return (
     <Modal open={call?.type === 'INCOMING'} onClose={onReject} size="sm">
-      <div className="call-modal" role="dialog" aria-label="Incoming voice call">
+      <div className="call-modal" role="dialog" aria-label={`Incoming ${kind.toLowerCase()} call`}>
         <div className={`call-modal-avatar${ringing ? ' call-modal-avatar--ringing' : ''}`}>
           <Avatar name={callerName} src={callerAvatar} size="lg" />
         </div>
         <div className="call-modal-pulse-ring" aria-hidden="true" />
-        <h2 className="call-modal-title">Incoming Voice Call</h2>
+        <h2 className="call-modal-title">Incoming {kind} Call</h2>
         <p className="call-modal-subtitle">{callerName}</p>
 
         <div className="call-modal-actions">

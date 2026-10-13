@@ -33,7 +33,8 @@ public class CallController {
             @AuthenticationPrincipal AuthenticatedUser currentUser,
             @Valid @RequestBody StartCallRequest request
     ) {
-        return callService.startCall(currentUser.id(), request.conversationId(), request.calleeId());
+        return callService.startCall(
+                currentUser.id(), request.conversationId(), request.calleeId(), request.callTypeOrDefault());
     }
 
     @PostMapping("/{callId}/accept")

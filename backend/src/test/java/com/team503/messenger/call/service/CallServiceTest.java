@@ -94,7 +94,7 @@ class CallServiceTest {
 
     @Test
     void startCreatesRingingCallAndNotifiesBoth() {
-        CallResponse res = service.startCall(CALLER, CONV, CALLEE);
+        CallResponse res = service.startCall(CALLER, CONV, CALLEE, Call.CallType.VOICE);
 
         assertThat(res.status()).isEqualTo("RINGING");
         assertThat(res.agoraChannelName()).startsWith("call-5-");
@@ -103,8 +103,18 @@ class CallServiceTest {
     }
 
     @Test
+    void startVideoCallPersistsVideoTypeAndPublishesIt() {
+        CallResponse res = service.startCall(CALLER, CONV, CALLEE, Call.CallType.VIDEO);
+
+        assertThat(res.callType()).isEqualTo("VIDEO");
+        ArgumentCaptor<CallEvent> captor = ArgumentCaptor.forClass(CallEvent.class);
+        verify(messaging).convertAndSendToUser(eq("bob"), eq("/queue/calls"), captor.capture());
+        assertThat(captor.getValue().callType()).isEqualTo("VIDEO");
+    }
+
+    @Test
     void startRejectsSelfCall() {
-        assertThatThrownBy(() -> service.startCall(CALLER, CONV, CALLER))
+        assertThatThrownBy(() -> service.startCall(CALLER, CONV, CALLER, Call.CallType.VOICE))
                 .isInstanceOf(CallException.class)
                 .extracting("code").isEqualTo("CALLER_AND_CALLEE_MUST_DIFFER");
     }
@@ -112,7 +122,7 @@ class CallServiceTest {
     @Test
     void startRejectsNonMember() {
         when(memberRepository.existsActiveMember(CONV, CALLEE)).thenReturn(false);
-        assertThatThrownBy(() -> service.startCall(CALLER, CONV, CALLEE))
+        assertThatThrownBy(() -> service.startCall(CALLER, CONV, CALLEE, Call.CallType.VOICE))
                 .isInstanceOf(CallException.class)
                 .extracting("code").isEqualTo("NOT_A_MEMBER");
     }
@@ -120,7 +130,7 @@ class CallServiceTest {
     @Test
     void startRejectsWhenConversationHasActiveCall() {
         when(callRepository.existsByConversationIdAndStatusIn(eq(CONV), any())).thenReturn(true);
-        assertThatThrownBy(() -> service.startCall(CALLER, CONV, CALLEE))
+        assertThatThrownBy(() -> service.startCall(CALLER, CONV, CALLEE, Call.CallType.VOICE))
                 .extracting("code").isEqualTo("CALL_ALREADY_ACTIVE");
         verify(callRepository, never()).save(any());
     }
@@ -128,7 +138,7 @@ class CallServiceTest {
     @Test
     void startRejectsBusyCallee() {
         when(callRepository.existsActiveForUser(eq(CALLEE), any())).thenReturn(true);
-        assertThatThrownBy(() -> service.startCall(CALLER, CONV, CALLEE))
+        assertThatThrownBy(() -> service.startCall(CALLER, CONV, CALLEE, Call.CallType.VOICE))
                 .extracting("code").isEqualTo("CALLEE_BUSY");
     }
 

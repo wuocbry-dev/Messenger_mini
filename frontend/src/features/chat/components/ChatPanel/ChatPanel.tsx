@@ -218,6 +218,12 @@ export function ChatPanel({
     }
   }, [otherUserId, activeConversation, startCall]);
 
+  const handleStartVideoCall = useCallback(() => {
+    if (otherUserId) {
+      void startCall(activeConversation!.id, otherUserId, 'VIDEO');
+    }
+  }, [otherUserId, activeConversation, startCall]);
+
   return (
     <div className={`chat-panel ${activeConversation ? 'chat-panel--has-active' : ''}`}>
       <Sidebar
@@ -244,6 +250,7 @@ export function ChatPanel({
               otherUserAvatar={otherUserAvatar}
               otherUserId={otherUserId}
               onCallClick={handleStartCall}
+              onVideoCallClick={handleStartVideoCall}
               callInProgress={!!activeCall}
               onMenuClick={() => setSidebarOpen(true)}
               onMediaClick={() => setMediaDrawerOpen(true)}
