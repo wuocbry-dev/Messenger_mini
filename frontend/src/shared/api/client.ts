@@ -4,7 +4,8 @@
  */
 import type { ApiError } from '../types';
 
-const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
+// Dùng relative URL để Vite proxy hoạt động
+const BASE = import.meta.env.VITE_API_URL ?? '';
 
 export class ApiRequestError extends Error {
   readonly status: number;

@@ -52,11 +52,18 @@ The call state machine lives in `Call` (entity) and `CallService`.
 | `REJECTED` | `RINGING` | `POST /api/v1/calls/{id}/reject` (callee) |
 | `CANCELLED` | `RINGING` | `POST /api/v1/calls/{id}/cancel` (caller) |
 | `ENDED`    | `ACCEPTED` | `POST /api/v1/calls/{id}/end` (caller or callee) |
-| `MISSED`   | `RINGING` | scheduled timeout (out of scope for this task) |
-| `FAILED`   | any non-terminal | internal error path |
+| `MISSED`   | `RINGING` | lazy cleanup on the next `POST /api/v1/calls` in the conversation, if ringing > 60s |
+| `FAILED`   | any non-terminal | internal error path; leftover `ACCEPTED` call when a new call starts in the conversation |
 
 `REJECTED`, `MISSED`, `CANCELLED`, `ENDED`, `FAILED` are terminal. The
 service rejects any state transition out of a terminal state.
+
+Orphan cleanup: `POST /api/v1/calls` first closes orphaned calls in the same
+conversation (stale `RINGING` → `MISSED`, leftover `ACCEPTED` → `FAILED` with
+an `ENDED` event to both participants). In a 1-to-1 conversation the requester
+is always a participant of the old call, so starting a new one means they have
+left it (e.g. Agora join failed or the tab was reloaded before `end`). Only a
+`RINGING` call younger than 60s still returns `409 CALL_ALREADY_ACTIVE`.
 
 ## REST endpoints (task 009)
 
@@ -131,6 +138,26 @@ AGORA_APP_ID
 AGORA_APP_CERTIFICATE   # backend-only, never exposed
 AGORA_TOKEN_TTL_SECONDS (default 600)
 ```
+
+## Token format
+
+`DefaultAgoraTokenService` emits Agora AccessToken2 (`007…`) RTC tokens with
+publisher privileges (join + publish audio/video/data), ported from Agora's
+reference `AccessToken2`/`RtcTokenBuilder2` and checked against its official
+test vectors. The token `uid` is the user's numeric id, which is also the uid
+the frontend passes to `client.join`. The startup log prints an `[agora]
+config` summary (App ID and certificate length/format, never the certificate),
+and each `/token` call logs `[agora] token issued` with channel, uid and expiry.
+
+## Frontend environment variables
+
+```text
+VITE_AGORA_APP_ID   # optional, public; overrides the appId returned by /token
+```
+
+The token is signed for the backend's `AGORA_APP_ID`, so `VITE_AGORA_APP_ID`
+must be the same value; the frontend logs a warning on mismatch. When empty,
+the frontend uses the `appId` from the token response.
 
 ## Channel name policy
 

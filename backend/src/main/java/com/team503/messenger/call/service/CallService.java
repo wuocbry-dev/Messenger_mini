@@ -19,6 +19,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -33,6 +35,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class CallService {
+
+    private static final Logger log = LoggerFactory.getLogger(CallService.class);
 
     private final CallRepository callRepository;
     private final ConversationRepository conversationRepository;
@@ -82,8 +86,11 @@ public class CallService {
         requireMember(conversationId, callerId, "caller");
         requireMember(conversationId, calleeId, "callee");
 
-        // For 1-to-1 calls: reject if conversation already has an active
-        // ringing/accepted call. This prevents duplicate invites.
+        // For 1-to-1 calls: reject if conversation already has a fresh
+        // ringing call. This prevents duplicate invites.
+        // First, auto-close orphaned calls (stale RINGING, leftover ACCEPTED).
+        cleanupStaleRingingCalls(conversationId);
+
         if (hasActiveCall(conversationId)) {
             throw new CallException(
                     HttpStatus.CONFLICT,
@@ -110,6 +117,32 @@ public class CallService {
         publishCallEvent(call, CallEvent::incoming, /*alsoCaller=*/ true);
 
         return toResponse(call);
+    }
+
+    /**
+     * Auto-close orphaned calls so they don't block new call attempts:
+     * - RINGING calls older than 60s become MISSED (callee disconnected
+     *   before accepting/rejecting).
+     * - ACCEPTED calls become FAILED. In a 1-to-1 conversation the requester
+     *   is always a participant of that call, and starting a new call means
+     *   they are no longer in it (e.g. Agora join failed or tab reloaded
+     *   before "end" was sent). Participants get an ENDED event to clean up.
+     */
+    private void cleanupStaleRingingCalls(Long conversationId) {
+        LocalDateTime now = LocalDateTime.now(clock);
+        LocalDateTime threshold = now.minusSeconds(60);
+        Page<Call> page = callRepository.findByConversationIdOrderByStartedAtDesc(
+                conversationId, PageRequest.of(0, 10)
+        );
+        for (Call call : page.getContent()) {
+            if (call.getStatus() == Call.Status.RINGING
+                    && call.getStartedAt().isBefore(threshold)) {
+                call.markMissed(now);
+            } else if (call.getStatus() == Call.Status.ACCEPTED) {
+                call.markFailed(now, Call.EndReason.FAILED_NETWORK.name());
+                publishCallEvent(call, CallEvent::ended, /*alsoCaller=*/ true);
+            }
+        }
     }
 
     @Transactional
@@ -230,6 +263,11 @@ public class CallService {
             );
         }
 
+        log.info("[agora] issuing token: callId={} status={} userId={} role={} channel={}",
+                call.getId(), call.getStatus(), userId,
+                call.getCallerId().equals(userId) ? "caller" : "callee",
+                call.getAgoraChannelName());
+
         // The App ID is public. The App Certificate is server-only and is
         // never returned.
         String token = agoraTokenService.generateRtcToken(
@@ -301,11 +339,26 @@ public class CallService {
                         "CALL_NOT_FOUND",
                         "Call not found"
                 ));
-        // Membership in the conversation acts as authorization for read
-        // access to call metadata.
-        if (!call.getCallerId().equals(userId) && !call.getCalleeId().equals(userId)) {
+        log.info(
+                "loadCallForUser: callId={} conversationId={} callerId={} calleeId={} status={} requestingUserId={}",
+                call.getId(),
+                call.getConversationId(),
+                call.getCallerId(),
+                call.getCalleeId(),
+                call.getStatus(),
+                userId
+        );
+        boolean isParticipant =
+                call.getCallerId().equals(userId) || call.getCalleeId().equals(userId);
+        if (!isParticipant) {
             // Non-participants must at least be members of the conversation.
-            if (!memberRepository.existsActiveMember(call.getConversationId(), userId)) {
+            boolean isMember = memberRepository.existsActiveMember(
+                    call.getConversationId(), userId);
+            log.info(
+                    "loadCallForUser: non-participant check userId={} isMember={}",
+                    userId, isMember
+            );
+            if (!isMember) {
                 throw new CallException(
                         HttpStatus.FORBIDDEN,
                         "NOT_A_PARTICIPANT",

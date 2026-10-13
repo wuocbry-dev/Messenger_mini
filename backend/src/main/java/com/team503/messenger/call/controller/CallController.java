@@ -6,6 +6,8 @@ import com.team503.messenger.call.dto.CallResponse;
 import com.team503.messenger.call.dto.CallTokenResponse;
 import com.team503.messenger.call.dto.StartCallRequest;
 import com.team503.messenger.call.service.CallService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/calls")
+@Tag(name = "Calls", description = "1-to-1 voice call lifecycle, Agora token issuance, call history.")
 public class CallController {
 
     private final CallService callService;
@@ -27,6 +30,7 @@ public class CallController {
     }
 
     @PostMapping
+    @Operation(summary = "Start a new 1-to-1 voice call")
     CallResponse startCall(
             @AuthenticationPrincipal AuthenticatedUser currentUser,
             @Valid @RequestBody StartCallRequest request
@@ -35,6 +39,7 @@ public class CallController {
     }
 
     @PostMapping("/{callId}/accept")
+    @Operation(summary = "Accept an incoming call")
     CallResponse acceptCall(
             @AuthenticationPrincipal AuthenticatedUser currentUser,
             @PathVariable Long callId
@@ -43,6 +48,7 @@ public class CallController {
     }
 
     @PostMapping("/{callId}/reject")
+    @Operation(summary = "Reject an incoming call")
     CallResponse rejectCall(
             @AuthenticationPrincipal AuthenticatedUser currentUser,
             @PathVariable Long callId
@@ -51,6 +57,7 @@ public class CallController {
     }
 
     @PostMapping("/{callId}/cancel")
+    @Operation(summary = "Cancel an outgoing call that has not been answered yet")
     CallResponse cancelCall(
             @AuthenticationPrincipal AuthenticatedUser currentUser,
             @PathVariable Long callId
@@ -59,6 +66,7 @@ public class CallController {
     }
 
     @PostMapping("/{callId}/end")
+    @Operation(summary = "End an active call")
     CallResponse endCall(
             @AuthenticationPrincipal AuthenticatedUser currentUser,
             @PathVariable Long callId
@@ -67,6 +75,10 @@ public class CallController {
     }
 
     @PostMapping("/{callId}/token")
+    @Operation(
+            summary = "Issue a short-lived Agora RTC token for this call",
+            description = "Returns appId, channel name and token. The token expires in seconds (see expiresInSeconds)."
+    )
     CallTokenResponse issueToken(
             @AuthenticationPrincipal AuthenticatedUser currentUser,
             @PathVariable Long callId
@@ -75,6 +87,7 @@ public class CallController {
     }
 
     @GetMapping("/{callId}")
+    @Operation(summary = "Get a single call by id")
     CallResponse getCall(
             @AuthenticationPrincipal AuthenticatedUser currentUser,
             @PathVariable Long callId
@@ -83,6 +96,7 @@ public class CallController {
     }
 
     @GetMapping
+    @Operation(summary = "List the current user's call history (paginated)")
     CallHistoryResponse listHistory(
             @AuthenticationPrincipal AuthenticatedUser currentUser,
             @RequestParam(defaultValue = "0") int page,
@@ -92,6 +106,7 @@ public class CallController {
     }
 
     @GetMapping("/conversations/{conversationId}")
+    @Operation(summary = "List call history for a specific conversation (paginated)")
     CallHistoryResponse listConversationHistory(
             @AuthenticationPrincipal AuthenticatedUser currentUser,
             @PathVariable Long conversationId,

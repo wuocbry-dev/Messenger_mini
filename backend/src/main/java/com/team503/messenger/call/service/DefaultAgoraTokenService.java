@@ -1,32 +1,57 @@
 package com.team503.messenger.call.service;
 
 import com.team503.messenger.call.config.AgoraProperties;
+import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.HashMap;
-import java.util.Map;
+import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
+import java.util.Base64;
+import java.util.regex.Pattern;
+import java.util.zip.Deflater;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
- * Agora RTC token generation. Implements the public Agora token builder
- * spec v0 (HMAC-SHA256 over the packed signing key). The App Certificate
- * is held only by this service and is never returned in any DTO or HTTP
- * response.
+ * Agora RTC token generation using the official AccessToken2 ("007") format,
+ * ported from Agora's reference builder
+ * (AgoraIO/Tools DynamicKey/AgoraDynamicKey/java: AccessToken2 + RtcTokenBuilder2).
  *
- * <p>Tokens are short-lived (default 600s) and are never persisted in MySQL.
- *
- * <p>Format reference: Agora docs for "Generate an RTC Token".
- * The on-wire format is:
  * <pre>
- *   signingKey = HKDF(appCertificate, appId, channelName, uid)
- *   payload    = { appId, ts, salt, channelName, uid, expiredTs }
- *   token      = base64url(header) + "." + base64url(payload) + "." + base64url(HMAC_SHA256(signingKey, header.payload))
+ *   signing   = HMAC(key=LE(salt), HMAC(key=LE(issueTs), appCertificate))
+ *   content   = str(appId) | LE(issueTs) | LE(expire) | LE(salt) | LE(u16 serviceCount) | serviceRtc
+ *   serviceRtc = LE(u16 type=1) | privileges map | str(channelName) | str(uid)
+ *   token     = "007" + base64(zlib(str(HMAC(signing, content)) | content))
  * </pre>
+ * where {@code str(x)} is a little-endian u16 length followed by the bytes.
+ *
+ * <p>The App Certificate is held only by this service and is never returned
+ * in any DTO or HTTP response, nor logged. Tokens are short-lived and never
+ * persisted in MySQL.
  */
 @Service
 public class DefaultAgoraTokenService implements AgoraTokenService {
+
+    private static final Logger log = LoggerFactory.getLogger(DefaultAgoraTokenService.class);
+
+    static final String VERSION = "007";
+    private static final short SERVICE_TYPE_RTC = 1;
+    static final short PRIVILEGE_JOIN_CHANNEL = 1;
+    static final short PRIVILEGE_PUBLISH_AUDIO_STREAM = 2;
+    static final short PRIVILEGE_PUBLISH_VIDEO_STREAM = 3;
+    static final short PRIVILEGE_PUBLISH_DATA_STREAM = 4;
+    /** Same privileges as RtcTokenBuilder2 with Role.ROLE_PUBLISHER. */
+    private static final short[] PUBLISHER_PRIVILEGES = {
+            PRIVILEGE_JOIN_CHANNEL,
+            PRIVILEGE_PUBLISH_AUDIO_STREAM,
+            PRIVILEGE_PUBLISH_VIDEO_STREAM,
+            PRIVILEGE_PUBLISH_DATA_STREAM
+    };
+    private static final Pattern HEX_32 = Pattern.compile("^[0-9a-fA-F]{32}$");
+    private static final SecureRandom RANDOM = new SecureRandom();
 
     private final AgoraProperties properties;
 
@@ -36,100 +61,82 @@ public class DefaultAgoraTokenService implements AgoraTokenService {
 
     @Override
     public String generateRtcToken(String channelName, long userId, int expiresInSeconds) {
-        if (properties.getAppId() == null || properties.getAppId().isBlank()) {
+        String appId = properties.getAppId();
+        String appCertificate = properties.getAppCertificate();
+        if (appId == null || appId.isBlank()) {
             throw new IllegalStateException("Agora App ID is not configured");
         }
-        if (properties.getAppCertificate() == null || properties.getAppCertificate().isBlank()) {
+        if (appCertificate == null || appCertificate.isBlank()) {
             throw new IllegalStateException("Agora App Certificate is not configured");
+        }
+        if (!HEX_32.matcher(appId).matches()) {
+            log.warn("[agora] App ID '{}' is not 32 hex chars; Agora will reject it", appId);
+        }
+        if (!HEX_32.matcher(appCertificate).matches()) {
+            log.warn("[agora] App Certificate is not 32 hex chars (length={}); tokens will be rejected",
+                    appCertificate.length());
         }
 
         int ttl = expiresInSeconds > 0
                 ? expiresInSeconds
                 : Math.toIntExact(properties.getTokenTtlSeconds());
+        int issueTs = (int) (System.currentTimeMillis() / 1000L);
+        int salt = RANDOM.nextInt(99_999_999) + 1;
 
-        int currentTimestamp = (int) (System.currentTimeMillis() / 1000L);
-        int expiredTs = currentTimestamp + ttl;
+        String token = buildToken(appId, appCertificate, channelName, uidString(userId), ttl, issueTs, salt,
+                PUBLISHER_PRIVILEGES);
 
-        // 1) Compute the signing key
-        byte[] signingKey = computeSigningKey(
-                properties.getAppId(),
-                properties.getAppCertificate(),
-                channelName,
-                (int) userId,
-                currentTimestamp,
-                expiredTs
-        );
-
-        // 2) Build the JWT-like payload
-        Map<String, Object> header = new HashMap<>();
-        header.put("typ", "JWT");
-        header.put("alg", "HS256");
-        String headerB64 = base64UrlEncode(toJson(header));
-
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("appId", properties.getAppId());
-        payload.put("channelName", channelName);
-        payload.put("uid", userId);
-        payload.put("expiredTs", expiredTs);
-        payload.put("ts", currentTimestamp);
-        String payloadB64 = base64UrlEncode(toJson(payload));
-
-        // 3) Sign
-        String signingInput = headerB64 + "." + payloadB64;
-        byte[] signature = hmacSha256(signingKey, signingInput.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        String signatureB64 = base64UrlEncode(signature);
-
-        return signingInput + "." + signatureB64;
+        log.info("[agora] token issued: appId={} channel={} uid={} ttl={}s issueTs={} expiresAt={} token={}...(len={})",
+                appId, channelName, uidString(userId), ttl, issueTs, issueTs + ttl,
+                token.substring(0, Math.min(12, token.length())), token.length());
+        return token;
     }
 
     /**
-     * Compute the signing key. The public Agora token builder uses a series
-     * of HMAC-SHA256 calls chained with the message length, similar to a
-     * simplified HKDF. We mirror that here to keep the token format
-     * compatible with the Agora client SDK which validates the token using
-     * the same derivation.
+     * Build an AccessToken2 RTC token. Visible for tests so that
+     * {@code issueTs} and {@code salt} can be fixed.
+     *
+     * @param privileges RTC privilege ids in ascending order (the reference
+     *                   builder stores them in a TreeMap); each expires after {@code ttl}
      */
-    private static byte[] computeSigningKey(
+    static String buildToken(
             String appId,
             String appCertificate,
             String channelName,
-            int uid,
-            int currentTimestamp,
-            int expiredTs
+            String uid,
+            int ttl,
+            int issueTs,
+            int salt,
+            short[] privileges
     ) {
-        byte[] signature = hmacSha256(
-                appCertificate.getBytes(java.nio.charset.StandardCharsets.UTF_8),
-                appId.getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        Buf content = new Buf()
+                .putString(appId)
+                .putInt(issueTs)
+                .putInt(ttl)
+                .putInt(salt)
+                .putShort((short) 1); // service count
+
+        content.putShort(SERVICE_TYPE_RTC).putShort((short) privileges.length);
+        for (short privilege : privileges) {
+            content.putShort(privilege).putInt(ttl);
+        }
+        content.putString(channelName).putString(uid);
+
+        byte[] signing = hmacSha256(
+                new Buf().putInt(salt).toBytes(),
+                hmacSha256(new Buf().putInt(issueTs).toBytes(), appCertificate.getBytes(StandardCharsets.UTF_8))
         );
+        byte[] contentBytes = content.toBytes();
+        byte[] signature = hmacSha256(signing, contentBytes);
 
-        byte[] channelNameBytes = channelName.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        byte[] buf = pack(currentTimestamp, expiredTs);
-        byte[] toSign = new byte[channelNameBytes.length + buf.length];
-        System.arraycopy(channelNameBytes, 0, toSign, 0, channelNameBytes.length);
-        System.arraycopy(buf, 0, toSign, channelNameBytes.length, buf.length);
-        signature = hmacSha256(signature, toSign);
-
-        // For numeric UIDs: sign the uid + "CONFLICT_STRING". For string
-        // UIDs, sign the user account. We only emit numeric UIDs in this
-        // slice.
-        byte[] uidBytes = pack(uid);
-        byte[] conflict = "CONFLICT".getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        byte[] uidSigned = new byte[uidBytes.length + conflict.length];
-        System.arraycopy(uidBytes, 0, uidSigned, 0, uidBytes.length);
-        System.arraycopy(conflict, 0, uidSigned, uidBytes.length, conflict.length);
-        signature = hmacSha256(signature, uidSigned);
-
-        // Final step: pack salt+ts+expiredTs and sign again
-        byte[] finalBuf = pack(currentTimestamp, expiredTs, /*salt*/ 0);
-        return hmacSha256(signature, finalBuf);
+        byte[] packed = new Buf().putBytes(signature).putRaw(contentBytes).toBytes();
+        return VERSION + Base64.getEncoder().encodeToString(zlib(packed));
     }
 
-    private static byte[] pack(int... values) {
-        ByteBuffer buffer = ByteBuffer.allocate(values.length * 4).order(ByteOrder.BIG_ENDIAN);
-        for (int v : values) {
-            buffer.putInt(v);
-        }
-        return buffer.array();
+    /** Agora encodes numeric uids as unsigned decimal strings; uid 0 means "any". */
+    static String uidString(long userId) {
+        long uid = userId & 0xFFFFFFFFL;
+        return uid == 0 ? "" : Long.toString(uid);
     }
 
     private static byte[] hmacSha256(byte[] key, byte[] data) {
@@ -142,40 +149,68 @@ public class DefaultAgoraTokenService implements AgoraTokenService {
         }
     }
 
-    private static String toJson(Map<String, Object> map) {
-        // Minimal hand-rolled JSON encoder to avoid pulling in jackson for
-        // the token builder. Order is not significant for the token because
-        // the receiver only HMACs the base64-url-encoded string; the same
-        // string is produced for the same input map.
-        StringBuilder sb = new StringBuilder("{");
-        boolean first = true;
-        for (Map.Entry<String, Object> e : map.entrySet()) {
-            if (!first) {
-                sb.append(',');
+    private static byte[] zlib(byte[] data) {
+        Deflater deflater = new Deflater();
+        try {
+            deflater.setInput(data);
+            deflater.finish();
+            ByteArrayOutputStream out = new ByteArrayOutputStream(data.length);
+            byte[] chunk = new byte[1024];
+            while (!deflater.finished()) {
+                out.write(chunk, 0, deflater.deflate(chunk));
             }
-            first = false;
-            sb.append('"').append(escape(e.getKey())).append('"').append(':');
-            Object v = e.getValue();
-            if (v instanceof Number) {
-                sb.append(v);
-            } else {
-                sb.append('"').append(escape(String.valueOf(v))).append('"');
-            }
+            return out.toByteArray();
+        } finally {
+            deflater.end();
         }
-        sb.append('}');
-        return sb.toString();
     }
 
-    private static String escape(String s) {
-        return s.replace("\\", "\\\\").replace("\"", "\\\"");
-    }
+    /** Little-endian packer matching Agora's ByteBuf. */
+    private static final class Buf {
+        private ByteBuffer buffer = ByteBuffer.allocate(256).order(ByteOrder.LITTLE_ENDIAN);
 
-    private static String base64UrlEncode(byte[] data) {
-        String standard = java.util.Base64.getEncoder().encodeToString(data);
-        return standard.replace('+', '-').replace('/', '_').replace("=", "");
-    }
+        Buf putShort(short v) {
+            ensure(Short.BYTES);
+            buffer.putShort(v);
+            return this;
+        }
 
-    private static String base64UrlEncode(String s) {
-        return base64UrlEncode(s.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        Buf putInt(int v) {
+            ensure(Integer.BYTES);
+            buffer.putInt(v);
+            return this;
+        }
+
+        Buf putBytes(byte[] v) {
+            putShort((short) v.length);
+            return putRaw(v);
+        }
+
+        Buf putString(String v) {
+            return putBytes(v.getBytes(StandardCharsets.UTF_8));
+        }
+
+        Buf putRaw(byte[] v) {
+            ensure(v.length);
+            buffer.put(v);
+            return this;
+        }
+
+        byte[] toBytes() {
+            byte[] out = new byte[buffer.position()];
+            System.arraycopy(buffer.array(), 0, out, 0, out.length);
+            return out;
+        }
+
+        private void ensure(int extra) {
+            if (buffer.remaining() >= extra) {
+                return;
+            }
+            ByteBuffer bigger = ByteBuffer.allocate(Math.max(buffer.capacity() * 2, buffer.position() + extra))
+                    .order(ByteOrder.LITTLE_ENDIAN);
+            buffer.flip();
+            bigger.put(buffer);
+            buffer = bigger;
+        }
     }
 }

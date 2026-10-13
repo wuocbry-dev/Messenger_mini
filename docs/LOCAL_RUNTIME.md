@@ -24,7 +24,15 @@ cd backend
 .\mvnw.cmd clean verify
 ```
 
-Load local environment variables and start Spring Boot:
+Load local environment variables and start Spring Boot. The bundled
+`backend/run-be.ps1` does this for you and warns if any critical secret is
+missing:
+
+```powershell
+.\run-be.ps1
+```
+
+If you prefer a manual one-liner instead of the script:
 
 ```powershell
 Get-Content .env | ForEach-Object {
@@ -40,15 +48,18 @@ Get-Content .env | ForEach-Object {
 
 After startup:
 
-- `GET http://localhost:8080/v3/api-docs`
-- `GET http://localhost:8080/swagger-ui.html`
+- Swagger UI: <http://localhost:8080/swagger-ui.html>
+- OpenAPI JSON: <http://localhost:8080/v3/api-docs>
 
-Expected OpenAPI metadata:
+The UI is grouped by tag: `Auth`, `Users`, `Conversations`, `Messages`,
+`Files`, `Calls`. Every protected operation shows a lock icon; click
+**Authorize** at the top and paste a JWT access token (from
+`POST /api/v1/auth/login`) to call them from the UI.
 
-```text
-title: Messenger Mini API
-version: v1
-```
+The base URL shown in the **Servers** dropdown comes from
+`app.public-base-url` (env: `APP_PUBLIC_BASE_URL`,
+default `http://localhost:8080`). Set this when running through a tunnel so
+`Try it out` requests hit the right host.
 
 ## Database Safety
 

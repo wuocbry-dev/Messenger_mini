@@ -27,10 +27,19 @@ spring:
     locations: classpath:db/migration
 
 springdoc:
+  api-docs:
+    path: /v3/api-docs
   swagger-ui:
     path: /swagger-ui.html
+    operations-sorter: alpha
+    tags-sorter: alpha
+    display-request-duration: true
+  show-actuator: false
 
+# Public server URL exposed in Swagger UI's "Servers" dropdown.
+# Override per environment if the API is behind a tunnel/proxy.
 app:
+  public-base-url: ${APP_PUBLIC_BASE_URL:http://localhost:8080}
   cors:
     # Comma-separated list of frontend origins allowed to call /api/**.
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
@@ -47,6 +56,6 @@ app:
       presigned-ttl-seconds: ${R2_PRESIGNED_TTL_SECONDS:900}
       key-prefix: ${R2_KEY_PREFIX:messenger/}
   agora:
-    app-id: ${AGORA_APP_ID:}
-    app-certificate: ${AGORA_APP_CERTIFICATE:}
+    app-id: ${AGORA_APP_ID:a43e60236da641ae8f24800666cfca43}
+    app-certificate: ${AGORA_APP_CERTIFICATE:874800e72219464c9454ceb739fca8fa}
     token-ttl-seconds: ${AGORA_TOKEN_TTL_SECONDS:600}

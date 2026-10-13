@@ -9,7 +9,14 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { Stomp, type Client } from 'stompjs/lib/stomp.js';
 
-const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8080/ws';
+// WebSocket URL: dùng env hoặc tự detect từ trình duyệt
+const getWsUrl = () => {
+  if (import.meta.env.VITE_WS_URL) return import.meta.env.VITE_WS_URL;
+  // Proxy qua Vite dev server (ws://localhost:5173/ws → ws://localhost:8080/ws)
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${window.location.host}/ws`;
+};
+const WS_URL = getWsUrl();
 
 export interface WsHandlers {
   onMessage?: (payload: unknown) => void;
@@ -26,6 +33,28 @@ const CHAT_TYPING_EVENT = 'chat:stomp-typing';
 const CHAT_RECEIPT_EVENT = 'chat:stomp-receipt';
 const CALL_EVENT_NAME = 'messenger:call-event';
 const PRESENCE_EVENT = 'chat:stomp-presence';
+
+/**
+ * Close a STOMP client in any state. stompjs' `disconnect()` throws/does
+ * nothing while the socket is still connecting, which left a second live
+ * session behind (React StrictMode mounts effects twice) and made every
+ * event fire twice.
+ */
+function closeClient(client: Client | null): void {
+  if (!client) return;
+  try {
+    if (client.connected) {
+      client.disconnect();
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    client.ws?.close();
+  } catch {
+    /* ignore */
+  }
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function dispatch(name: string, detail: any): void {
@@ -47,11 +76,7 @@ export function useWebSocket(handlers: WsHandlers) {
     }
     const previous = clientRef.current;
     clientRef.current = null;
-    try {
-      previous?.disconnect();
-    } catch {
-      /* ignore */
-    }
+    closeClient(previous);
     const token = sessionStorage.getItem('accessToken');
     if (!token) {
       setStatus('disconnected');
@@ -78,6 +103,11 @@ export function useWebSocket(handlers: WsHandlers) {
       client.connect(
         { Authorization: `Bearer ${token}` },
         () => {
+          if (clientRef.current !== client) {
+            // Superseded (reconnect or unmount) while the handshake was in flight.
+            closeClient(client);
+            return;
+          }
           setStatus('connected');
           // Spring resolves `/user/queue/...` to the authenticated session's
           // private queue; the server sends with convertAndSendToUser.
@@ -144,12 +174,9 @@ export function useWebSocket(handlers: WsHandlers) {
         clearTimeout(reconnectTimer.current);
         reconnectTimer.current = null;
       }
-      try {
-        clientRef.current?.disconnect();
-      } catch {
-        /* ignore */
-      }
+      const client = clientRef.current;
       clientRef.current = null;
+      closeClient(client);
     };
   }, [connect]);
 

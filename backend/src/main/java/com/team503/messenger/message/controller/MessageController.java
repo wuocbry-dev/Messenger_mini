@@ -9,6 +9,8 @@ import com.team503.messenger.message.entity.Message;
 import com.team503.messenger.message.exception.MessageException;
 import com.team503.messenger.message.service.MessageRealtimePublisher;
 import com.team503.messenger.message.service.MessageService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1")
+@Tag(name = "Messages", description = "Send, list and fetch chat messages and attachments.")
 public class MessageController {
 
     private final MessageService messageService;
@@ -33,6 +36,7 @@ public class MessageController {
     }
 
     @PostMapping("/conversations/{conversationId}/messages")
+    @Operation(summary = "Send a text message to a conversation")
     MessageResponse sendMessage(
             @AuthenticationPrincipal AuthenticatedUser currentUser,
             @PathVariable Long conversationId,
@@ -42,6 +46,10 @@ public class MessageController {
     }
 
     @PostMapping("/conversations/{conversationId}/attachments")
+    @Operation(
+            summary = "Send a message that references an already-uploaded file (image or other)",
+            description = "Use POST /api/v1/files to upload the file first, then call this with the returned fileId."
+    )
     MessageResponse sendAttachment(
             @AuthenticationPrincipal AuthenticatedUser currentUser,
             @PathVariable Long conversationId,
@@ -74,6 +82,7 @@ public class MessageController {
     }
 
     @GetMapping("/conversations/{conversationId}/messages")
+    @Operation(summary = "List messages in a conversation (paginated, newest first)")
     MessagePageResponse listMessages(
             @AuthenticationPrincipal AuthenticatedUser currentUser,
             @PathVariable Long conversationId,
@@ -84,6 +93,7 @@ public class MessageController {
     }
 
     @GetMapping("/messages/{messageId}")
+    @Operation(summary = "Fetch a single message by id")
     MessageResponse getMessage(
             @AuthenticationPrincipal AuthenticatedUser currentUser,
             @PathVariable Long messageId

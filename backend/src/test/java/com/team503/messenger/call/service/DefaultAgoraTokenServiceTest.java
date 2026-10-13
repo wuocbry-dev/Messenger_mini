@@ -8,31 +8,63 @@ import org.junit.jupiter.api.Test;
 
 class DefaultAgoraTokenServiceTest {
 
-    @Test
-    void generatesNonEmptyJwtStyleTokenWithAppCredentials() {
+    // Test vector from Agora's reference builder:
+    // AgoraIO/Tools DynamicKey/AgoraDynamicKey/java/src/test/java/io/agora/media/AccessToken2Test.java
+    private static final String REF_APP_ID = "970CA35de60c44645bbae8a215061b33";
+    private static final String REF_APP_CERT = "5CFd2fd1755d40ecb72977518be15d3b";
+    private static final String REF_CHANNEL = "7d72365eb983485397e3e3f9d460bdda";
+
+    private static AgoraProperties validProperties() {
         AgoraProperties properties = new AgoraProperties();
-        properties.setAppId("test-app-id");
-        properties.setAppCertificate("test-cert");
+        properties.setAppId(REF_APP_ID);
+        properties.setAppCertificate(REF_APP_CERT);
         properties.setTokenTtlSeconds(600);
-        DefaultAgoraTokenService service = new DefaultAgoraTokenService(properties);
+        return properties;
+    }
+
+    @Test
+    void matchesAgoraReferenceVectorForUid() {
+        String token = DefaultAgoraTokenService.buildToken(
+                REF_APP_ID, REF_APP_CERT, REF_CHANNEL, "2882341273", 600, 1111111, 1,
+                new short[] {DefaultAgoraTokenService.PRIVILEGE_JOIN_CHANNEL}
+        );
+
+        assertThat(token).isEqualTo(
+                "007eJxTYBBbsMMnKq7p9Hf/HcIX5kce9b518kCiQgSr5Zrp4X1Tu6UUGCzNDZwdjU1TUs0Mkk1MzExMk5ISUy0SjQxNDcwMk4yN3b8IMEQwMTAwMoAwBIL4CgzmKeZGxmamqUmWFsYmFqbGluapxqnGaZYpJmYGSSkpiVwMRhYWRsYmhkbmxgDCaiTj");
+    }
+
+    @Test
+    void matchesAgoraReferenceVectorForUidZero() {
+        String token = DefaultAgoraTokenService.buildToken(
+                REF_APP_ID, REF_APP_CERT, REF_CHANNEL, "", 600, 1111111, 1,
+                new short[] {DefaultAgoraTokenService.PRIVILEGE_JOIN_CHANNEL}
+        );
+
+        assertThat(token).isEqualTo(
+                "007eJxTYLhzZP08Lxa1Pg57+TcXb/3cZ3wi4V6kbpbOog0G2dOYk20UGCzNDZwdjU1TUs0Mkk1MzExMk5ISUy0SjQxNDcwMk4yN3b8IMEQwMTAwMoAwBIL4CgzmKeZGxmamqUmWFsYmFqbGluapxqnGaZYpJmYGSSkpiQwMADacImo=");
+    }
+
+    @Test
+    void uidIsEncodedAsUnsignedDecimalAndZeroAsEmpty() {
+        assertThat(DefaultAgoraTokenService.uidString(19L)).isEqualTo("19");
+        assertThat(DefaultAgoraTokenService.uidString(2882341273L)).isEqualTo("2882341273");
+        assertThat(DefaultAgoraTokenService.uidString(0L)).isEmpty();
+    }
+
+    @Test
+    void generatesVersion007TokenWithoutLeakingCertificate() {
+        DefaultAgoraTokenService service = new DefaultAgoraTokenService(validProperties());
 
         String token = service.generateRtcToken("call-1-abc", 42L, 600);
 
-        assertThat(token).isNotBlank();
-        // JWT-like format: three dot-separated base64-url sections
-        String[] parts = token.split("\\.");  
-        assertThat(parts).hasSize(3);
-        // The token must not be a plaintext copy of the channel name or the
-        // user id.
-        assertThat(token).isNotEqualTo("call-1-abc");
-        // The certificate must not appear in plaintext in the token body.
-        assertThat(token).doesNotContain("test-cert");
+        assertThat(token).startsWith("007");
+        assertThat(token).doesNotContain(REF_APP_CERT);
     }
 
     @Test
     void rejectsMissingAppId() {
-        AgoraProperties properties = new AgoraProperties();
-        properties.setAppCertificate("test-cert");
+        AgoraProperties properties = validProperties();
+        properties.setAppId(null);
         DefaultAgoraTokenService service = new DefaultAgoraTokenService(properties);
 
         assertThatThrownBy(() -> service.generateRtcToken("call-1-abc", 1L, 600))
@@ -42,8 +74,8 @@ class DefaultAgoraTokenServiceTest {
 
     @Test
     void rejectsMissingAppCertificate() {
-        AgoraProperties properties = new AgoraProperties();
-        properties.setAppId("test-app-id");
+        AgoraProperties properties = validProperties();
+        properties.setAppCertificate(null);
         DefaultAgoraTokenService service = new DefaultAgoraTokenService(properties);
 
         assertThatThrownBy(() -> service.generateRtcToken("call-1-abc", 1L, 600))
@@ -52,57 +84,17 @@ class DefaultAgoraTokenServiceTest {
     }
 
     @Test
-    void usesProvidedTtlWhenPositive() {
-        AgoraProperties properties = new AgoraProperties();
-        properties.setAppId("test-app-id");
-        properties.setAppCertificate("test-cert");
-        DefaultAgoraTokenService service = new DefaultAgoraTokenService(properties);
+    void differentChannelsAndUsersProduceDifferentTokens() {
+        String base = DefaultAgoraTokenService.buildToken(
+                REF_APP_ID, REF_APP_CERT, "call-1-aaa", "1", 600, 1111111, 1,
+                new short[] {DefaultAgoraTokenService.PRIVILEGE_JOIN_CHANNEL});
+        String otherChannel = DefaultAgoraTokenService.buildToken(
+                REF_APP_ID, REF_APP_CERT, "call-1-bbb", "1", 600, 1111111, 1,
+                new short[] {DefaultAgoraTokenService.PRIVILEGE_JOIN_CHANNEL});
+        String otherUser = DefaultAgoraTokenService.buildToken(
+                REF_APP_ID, REF_APP_CERT, "call-1-aaa", "2", 600, 1111111, 1,
+                new short[] {DefaultAgoraTokenService.PRIVILEGE_JOIN_CHANNEL});
 
-        String t1 = service.generateRtcToken("call-1-abc", 42L, 600);
-        // Different TTLs yield different `expiredTs` and therefore different
-        // signatures.
-        String t2 = service.generateRtcToken("call-1-abc", 42L, 1200);
-
-        assertThat(t1).isNotEqualTo(t2);
-    }
-
-    @Test
-    void usesConfiguredTtlWhenZero() {
-        AgoraProperties properties = new AgoraProperties();
-        properties.setAppId("test-app-id");
-        properties.setAppCertificate("test-cert");
-        properties.setTokenTtlSeconds(900);
-        DefaultAgoraTokenService service = new DefaultAgoraTokenService(properties);
-
-        String token = service.generateRtcToken("call-1-abc", 42L, 0);
-
-        assertThat(token).isNotBlank();
-        assertThat(token.split("\\.")).hasSize(3);
-    }
-
-    @Test
-    void differentChannelNamesProduceDifferentTokens() {
-        AgoraProperties properties = new AgoraProperties();
-        properties.setAppId("test-app-id");
-        properties.setAppCertificate("test-cert");
-        DefaultAgoraTokenService service = new DefaultAgoraTokenService(properties);
-
-        String t1 = service.generateRtcToken("call-1-aaa", 42L, 600);
-        String t2 = service.generateRtcToken("call-1-bbb", 42L, 600);
-
-        assertThat(t1).isNotEqualTo(t2);
-    }
-
-    @Test
-    void differentUserIdsProduceDifferentTokens() {
-        AgoraProperties properties = new AgoraProperties();
-        properties.setAppId("test-app-id");
-        properties.setAppCertificate("test-cert");
-        DefaultAgoraTokenService service = new DefaultAgoraTokenService(properties);
-
-        String t1 = service.generateRtcToken("call-1-abc", 1L, 600);
-        String t2 = service.generateRtcToken("call-1-abc", 2L, 600);
-
-        assertThat(t1).isNotEqualTo(t2);
+        assertThat(base).isNotEqualTo(otherChannel).isNotEqualTo(otherUser);
     }
 }

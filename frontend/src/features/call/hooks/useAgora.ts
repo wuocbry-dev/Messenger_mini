@@ -36,9 +36,23 @@ export function useAgora() {
 
   /**
    * Join an Agora channel. `token` and `appId` come from the backend.
+   * `VITE_AGORA_APP_ID` (public value) overrides the backend App ID when set.
    */
-  const join = useCallback(async (appId: string, channelName: string, uid: number, token: string) => {
+  const join = useCallback(async (backendAppId: string, channelName: string, uid: number, token: string) => {
+    // Set before any await so a second, concurrent join (e.g. a duplicated
+    // ACCEPTED event) can't create another client with the same uid.
     if (joinedRef.current) return;
+    joinedRef.current = true;
+
+    const envAppId = import.meta.env.VITE_AGORA_APP_ID?.trim();
+    const appId = envAppId || backendAppId;
+    if (envAppId && backendAppId && envAppId !== backendAppId) {
+      // The token is signed by the backend for its own App ID, so a mismatch
+      // makes Agora reject the join.
+      console.warn(
+        `VITE_AGORA_APP_ID (${envAppId}) differs from backend AGORA_APP_ID (${backendAppId}); the token will not match.`
+      );
+    }
 
     setPhase('requesting');
 
@@ -83,7 +97,6 @@ export function useAgora() {
       // Publish local audio
       await client.publish(localTrack);
 
-      joinedRef.current = true;
       setState(prev => ({ ...prev, phase: 'joined' }));
 
     } catch (err) {
@@ -92,6 +105,7 @@ export function useAgora() {
       localTrackRef.current?.close();
       localTrackRef.current = null;
       clientRef.current = null;
+      joinedRef.current = false;
     }
   }, [setPhase]);
 

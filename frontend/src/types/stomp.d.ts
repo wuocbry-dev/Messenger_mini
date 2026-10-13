@@ -19,6 +19,8 @@ declare module 'stompjs/lib/stomp.js' {
     disconnect(callback?: () => void): void;
     debug: ((message: string) => void) | null;
     connected: boolean;
+    /** Underlying socket; `disconnect()` is a no-op until the STOMP handshake finishes. */
+    ws: WebSocket;
   }
 
   export const Stomp: {

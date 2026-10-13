@@ -5,6 +5,8 @@ import com.team503.messenger.user.dto.UpdateProfileRequest;
 import com.team503.messenger.user.dto.UserResponse;
 import com.team503.messenger.user.dto.UserSearchResult;
 import com.team503.messenger.user.service.UserService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/users")
+@Tag(name = "Users", description = "User profile, lookup and search.")
 public class UserController {
 
     private final UserService userService;
@@ -26,11 +29,13 @@ public class UserController {
     }
 
     @GetMapping("/me")
+    @Operation(summary = "Get the currently authenticated user profile")
     UserResponse me(@AuthenticationPrincipal AuthenticatedUser currentUser) {
         return userService.getCurrentUser(currentUser.id());
     }
 
     @PatchMapping("/me/profile")
+    @Operation(summary = "Update the current user's display name, email or status")
     UserResponse updateProfile(
             @AuthenticationPrincipal AuthenticatedUser currentUser,
             @Valid @RequestBody UpdateProfileRequest request
@@ -42,6 +47,7 @@ public class UserController {
      * Get all active users (for user directory).
      */
     @GetMapping
+    @Operation(summary = "List all active users in the directory")
     List<UserSearchResult> getAllUsers(@AuthenticationPrincipal AuthenticatedUser currentUser) {
         return userService.getAllActiveUsers(currentUser.id());
     }
@@ -51,6 +57,7 @@ public class UserController {
      * Used by the New Conversation modal.
      */
     @GetMapping("/search")
+    @Operation(summary = "Search users by username or display name prefix")
     List<UserSearchResult> searchUsers(
             @AuthenticationPrincipal AuthenticatedUser currentUser,
             @RequestParam("q") String query

@@ -58,18 +58,30 @@ interface Props {
 export function CallProvider({ currentUserId, getUserName, getUserAvatar, onError, children }: Props) {
   const [incomingCall, setIncomingCall] = useState<CallEvent | null>(null);
   const [activeCall, setActiveCall] = useState<ActiveCallInfo | null>(null);
-  const [outgoing, setOutgoing] = useState(false);
+  const [, setOutgoing] = useState(false);
   const { state: agoraState, join, leave } = useAgora();
   const incomingCallRef = useRef<CallEvent | null>(null);
   incomingCallRef.current = incomingCall;
   const activeCallRef = useRef<ActiveCallInfo | null>(null);
   activeCallRef.current = activeCall;
-  const outgoingRef = useRef(false);
-  outgoingRef.current = outgoing;
 
   const handleError = useCallback(
     (err: unknown) => {
-      const message = err instanceof Error ? err.message : 'Call error';
+      let message: string;
+      if (err && typeof err === 'object' && 'status' in err) {
+        const status = (err as { status: number }).status;
+        if (status === 409) {
+          message = 'A call is already active. Please end the current call first.';
+        } else if (status === 403) {
+          message = 'You are not allowed to perform this action.';
+        } else if (status === 404) {
+          message = 'Call not found.';
+        } else {
+          message = err instanceof Error ? err.message : 'Call error';
+        }
+      } else {
+        message = err instanceof Error ? err.message : 'Call error';
+      }
       onError?.(message);
     },
     [onError]
@@ -77,8 +89,10 @@ export function CallProvider({ currentUserId, getUserName, getUserAvatar, onErro
 
   const startCall = useCallback(
     async (conversationId: number, calleeId: number) => {
+      let createdCallId: number | null = null;
       try {
         const call = await callApi.start(conversationId, calleeId);
+        createdCallId = call.id;
         setActiveCall({
           id: call.id,
           channelName: call.agoraChannelName,
@@ -92,11 +106,23 @@ export function CallProvider({ currentUserId, getUserName, getUserAvatar, onErro
         await join(token.appId, token.agoraChannelName, currentUserId, token.token);
       } catch (err) {
         handleError(err);
+        // Call was created but token/Agora join failed: cancel it so the
+        // callee is not left ringing for a call the caller can't join.
+        if (createdCallId !== null) {
+          const callId = createdCallId;
+          // cancel only works while RINGING; if already accepted, end it.
+          void callApi.cancel(callId).catch(() => callApi.end(callId).catch(() => {}));
+          void leave();
+        }
         setActiveCall(null);
         setOutgoing(false);
+        // If conflict, also cancel any pending state
+        if (err && typeof err === 'object' && 'status' in err && (err as { status: number }).status === 409) {
+          setIncomingCall(null);
+        }
       }
     },
-    [currentUserId, join, getUserName, getUserAvatar, handleError]
+    [currentUserId, join, leave, getUserName, getUserAvatar, handleError]
   );
 
   const acceptIncoming = useCallback(async () => {
@@ -140,15 +166,21 @@ export function CallProvider({ currentUserId, getUserName, getUserAvatar, onErro
     const handler = (e: Event) => {
       const event = (e as CustomEvent<CallEvent>).detail;
       if (!event?.type) return;
+      // The backend also sends INCOMING/ACCEPTED to the caller (cross-device
+      // sync), so decide the role from the event, not from local UI state.
+      const isCaller = event.callerId === currentUserId;
       switch (event.type) {
         case 'INCOMING':
-          if (!activeCallRef.current) {
+          if (!isCaller && !activeCallRef.current) {
             setIncomingCall(event);
           }
           break;
         case 'ACCEPTED':
-          if (outgoingRef.current) {
+          if (isCaller) {
             setOutgoing(false);
+          } else if (activeCallRef.current?.id === event.callId) {
+            // Duplicate ACCEPTED for a call we already joined.
+            break;
           } else {
             setIncomingCall(null);
             setActiveCall({
@@ -164,13 +196,21 @@ export function CallProvider({ currentUserId, getUserName, getUserAvatar, onErro
               .then((token) =>
                 join(token.appId, token.agoraChannelName, currentUserId, token.token)
               )
-              .catch(handleError);
+              .catch((err) => {
+                handleError(err);
+                // Don't leave an ACCEPTED call behind that nobody is in.
+                void callApi.end(event.callId).catch(() => {});
+                void leave();
+                setActiveCall(null);
+              });
           }
           break;
         case 'REJECTED':
         case 'CANCELLED':
+          setIncomingCall((current) => (current?.callId === event.callId ? null : current));
           setOutgoing(false);
           setActiveCall(null);
+          void leave();
           break;
         case 'ENDED':
           setActiveCall(null);

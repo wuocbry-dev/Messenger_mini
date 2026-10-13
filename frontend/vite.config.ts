@@ -7,6 +7,26 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    // Cho phép truy cập từ mạng LAN
+    host: true,
+    // Proxy requests sang backend
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        // Trình duyệt coi request qua proxy là same-origin. Bỏ header Origin
+        // để Spring CORS không chặn (403) khi truy cập qua devtunnel / IP LAN.
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            proxyReq.removeHeader('origin');
+          });
+        },
+      },
+      '/ws': {
+        target: 'ws://localhost:8080',
+        ws: true,
+      },
+    },
   },
   resolve: {
     alias: {

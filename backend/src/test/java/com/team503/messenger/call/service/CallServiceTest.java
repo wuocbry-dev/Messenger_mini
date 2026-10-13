@@ -137,6 +137,32 @@ class CallServiceTest {
     }
 
     @Test
+    void startCallClosesLeftoverAcceptedCallAndStartsNewOne() {
+        when(conversationRepository.existsById(1L)).thenReturn(true);
+        when(memberRepository.existsActiveMember(1L, 1L)).thenReturn(true);
+        when(memberRepository.existsActiveMember(1L, 2L)).thenReturn(true);
+        Call leftover = Call.ringing(1L, 1L, 2L, Call.CallType.VOICE, "call-1-old", NOW.minusMinutes(5));
+        ReflectionTestUtils.setField(leftover, "id", 99L);
+        leftover.markAccepted(NOW.minusMinutes(4));
+        when(callRepository.findByConversationIdOrderByStartedAtDesc(anyLong(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(leftover)));
+        when(callRepository.save(any(Call.class))).thenAnswer(inv -> {
+            Call c = inv.getArgument(0);
+            ReflectionTestUtils.setField(c, "id", 100L);
+            return c;
+        });
+        when(userRepository.findAllById(any())).thenReturn(List.of(activeUser(1L, "alice"), activeUser(2L, "bob")));
+
+        CallResponse response = callService.startCall(1L, 1L, 2L);
+
+        assertThat(leftover.getStatus()).isEqualTo(Call.Status.FAILED);
+        assertThat(response.status()).isEqualTo("RINGING");
+        // ENDED for the leftover call + INCOMING for the new one, each to both users.
+        verify(messagingTemplate, times(4))
+                .convertAndSendToUser(anyString(), anyString(), any());
+    }
+
+    @Test
     void acceptTransitionsRingingToAcceptedAndPublishes() {
         Call call = Call.ringing(1L, 1L, 2L, Call.CallType.VOICE, "call-1-x", NOW);
         ReflectionTestUtils.setField(call, "id", 100L);

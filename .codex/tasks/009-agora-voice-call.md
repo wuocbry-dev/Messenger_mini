@@ -52,6 +52,8 @@ Rules:
 - validate legal state transitions
 - prevent unauthorized call actions
 
+AGORA_APP_ID=a43e60236da641ae8f24800666cfca43
+AGORA_APP_CERTIFICATE=874800e72219464c9454ceb739fca8fa
 Realtime incoming call events may use existing WebSocket/STOMP channel.
 
 Add AgoraTokenService implementation.
