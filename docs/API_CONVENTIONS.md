@@ -73,4 +73,4 @@ Access tokens are sent as:
 Authorization: Bearer <accessToken>
 ```
 
-Refresh tokens are stored only as SHA-256 hashes in MySQL. Passwords are stored only as BCrypt hashes. API responses must not include `password_hash`, JWT secrets, refresh token hashes, or integration secrets.
+Token lifetimes default to 1 hour for access tokens (`JWT_ACCESS_TOKEN_TTL_SECONDS`) and 90 days for refresh tokens (`JWT_REFRESH_TOKEN_TTL_DAYS`). Each refresh rotates the refresh token and starts a new 90-day window, so an active user stays signed in. The frontend keeps both tokens in localStorage, renews the access token shortly before it expires (and on a 401), and signs out only when the refresh token is rejected. Refresh tokens are stored only as SHA-256 hashes in MySQL. Passwords are stored only as BCrypt hashes. API responses must not include `password_hash`, JWT secrets, refresh token hashes, or integration secrets.

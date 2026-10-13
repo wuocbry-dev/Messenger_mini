@@ -3,6 +3,8 @@
  * Never exposes backend secrets.
  */
 import type { ApiError } from '../types';
+import { refreshAccessToken } from '../auth/refresh';
+import { tokenStorage } from '../auth/tokenStorage';
 
 // Empty = same origin; the Vite dev proxy forwards /api to the backend.
 const BASE = import.meta.env.VITE_API_URL ?? '';
@@ -20,13 +22,22 @@ export class ApiRequestError extends Error {
 }
 
 function getToken(): string | null {
-  return sessionStorage.getItem('accessToken');
+  return tokenStorage.getAccess();
+}
+
+/** The session is really over: drop it and go to the sign-in page. */
+function endSession(): void {
+  tokenStorage.clear();
+  if (!window.location.pathname.startsWith('/auth')) {
+    window.location.assign('/auth');
+  }
 }
 
 async function request<T>(
   method: string,
   path: string,
   body?: unknown,
+  retried = false,
 ): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -42,6 +53,20 @@ async function request<T>(
     body: body != null ? JSON.stringify(body) : undefined,
     credentials: 'include',
   });
+
+  // Expired access token: renew silently and repeat the request once.
+  if (res.status === 401 && !retried && token && !path.startsWith('/api/v1/auth/')) {
+    let renewed: string | null = null;
+    try {
+      renewed = await refreshAccessToken();
+    } catch {
+      // Offline or server down: keep the session, surface the failure.
+      throw new ApiRequestError(0, 'Network error, please try again');
+    }
+    if (renewed) return request<T>(method, path, body, true);
+    endSession();
+    throw new ApiRequestError(401, 'Your session has expired', 'SESSION_EXPIRED');
+  }
 
   if (res.status === 204) {
     return undefined as T;

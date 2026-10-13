@@ -3,6 +3,7 @@
  * In a larger app this would be a proper state manager.
  */
 import { createContext, useContext } from 'react';
+import { tokenStorage } from '../../../shared/auth/tokenStorage';
 import type { User } from '../../../shared/types';
 
 export interface AuthState {
@@ -11,13 +12,11 @@ export interface AuthState {
   isAuthenticated: boolean;
 }
 
-export const AUTH_TOKEN_KEY = 'accessToken';
-const AUTH_USER_KEY = 'authUser';
-const REFRESH_TOKEN_KEY = 'refreshToken';
+export const AUTH_USER_UPDATED_EVENT = 'auth:user-updated';
 
 export function loadAuthFromStorage(): AuthState {
-  const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
-  const userRaw = sessionStorage.getItem(AUTH_USER_KEY);
+  const token = tokenStorage.getAccess();
+  const userRaw = tokenStorage.getUserJson();
   let user: User | null = null;
   if (userRaw) {
     try {
@@ -29,31 +28,24 @@ export function loadAuthFromStorage(): AuthState {
   return {
     user,
     accessToken: token,
+    // An expired access token is fine: the refresh token renews it silently.
     isAuthenticated: !!token && !!user,
   };
 }
 
-export function saveAuth(token: string, user: User): void {
-  sessionStorage.setItem(AUTH_TOKEN_KEY, token);
-  sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+export function saveAuth(token: string, user: User, refreshToken?: string): void {
+  tokenStorage.setTokens(token, refreshToken);
+  tokenStorage.setUserJson(JSON.stringify(user));
 }
-
-export const AUTH_USER_UPDATED_EVENT = 'auth:user-updated';
 
 /** Replace the cached user (e.g. after a profile edit) and notify listeners. */
 export function updateStoredUser(user: User): void {
-  try {
-    sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
-  } catch {
-    /* storage unavailable */
-  }
+  tokenStorage.setUserJson(JSON.stringify(user));
   window.dispatchEvent(new CustomEvent<User>(AUTH_USER_UPDATED_EVENT, { detail: user }));
 }
 
 export function clearAuth(): void {
-  sessionStorage.removeItem(AUTH_TOKEN_KEY);
-  sessionStorage.removeItem(AUTH_USER_KEY);
-  sessionStorage.removeItem(REFRESH_TOKEN_KEY);
+  tokenStorage.clear();
 }
 
 export const AuthContext = createContext<AuthState>(loadAuthFromStorage());

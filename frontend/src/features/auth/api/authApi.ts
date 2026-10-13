@@ -1,6 +1,7 @@
 import { api } from '../../../shared/api';
 import type { User } from '../../../shared/types';
 import { saveAuth } from '../store/authStore';
+import { tokenStorage } from '../../../shared/auth/tokenStorage';
 
 export interface LoginRequest {
   usernameOrEmail: string;
@@ -36,9 +37,12 @@ export const authApi = {
   },
 
   logout(): Promise<void> {
-    const refreshToken = sessionStorage.getItem('refreshToken');
-    sessionStorage.removeItem('refreshToken');
-    return api.post('/api/v1/auth/logout', { refreshToken });
+    const refreshToken = tokenStorage.getRefresh();
+    // Local sign-out must always succeed, even if the server call fails.
+    const done = refreshToken
+      ? api.post<void>('/api/v1/auth/logout', { refreshToken }).catch(() => {})
+      : Promise.resolve();
+    return done.finally(() => tokenStorage.clear());
   },
 
   refresh(refreshToken: string): Promise<{ accessToken: string }> {
@@ -54,7 +58,7 @@ export const authApi = {
   },
 
   getCurrentUser(): User | null {
-    const raw = sessionStorage.getItem('authUser');
+    const raw = tokenStorage.getUserJson();
     if (!raw) return null;
     try {
       return JSON.parse(raw) as User;
@@ -64,7 +68,6 @@ export const authApi = {
   },
 
   persistLogin(response: AuthResponse): void {
-    sessionStorage.setItem('refreshToken', response.refreshToken);
-    saveAuth(response.accessToken, response.user);
+    saveAuth(response.accessToken, response.user, response.refreshToken);
   },
 };

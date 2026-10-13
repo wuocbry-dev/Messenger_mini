@@ -8,6 +8,8 @@
  */
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { Stomp, type Client } from 'stompjs/lib/stomp.js';
+import { ensureFreshToken } from '../auth/refresh';
+import { tokenStorage } from '../auth/tokenStorage';
 
 // Default: same origin (ws/wss follows the page protocol) via the Vite dev proxy.
 const WS_URL =
@@ -55,7 +57,10 @@ export function useWebSocket(handlers: WsHandlers) {
     } catch {
       /* ignore */
     }
-    const token = sessionStorage.getItem('accessToken');
+    // Renew the access token first if it is about to expire, so reconnects after
+    // sleep or a long offline period still authenticate.
+    await ensureFreshToken();
+    const token = tokenStorage.getAccess();
     if (!token) {
       setStatus('disconnected');
       return;
