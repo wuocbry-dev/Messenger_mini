@@ -1,5 +1,5 @@
 import { api } from '../../../shared/api';
-import type { Message, Paginated } from '../../../shared/types';
+import type { Message, MessagePageResponse } from '../../../shared/types';
 
 export interface UploadFileResponse {
   fileId: number;
@@ -21,10 +21,10 @@ export interface FileResponse {
 }
 
 export const messageApi = {
-  list(conversationId: number, params?: { page?: number; size?: number }): Promise<Paginated<Message>> {
+  list(conversationId: number, params?: { page?: number; size?: number }): Promise<MessagePageResponse> {
     const page = params?.page ?? 0;
     const size = params?.size ?? 50;
-    return api.get<Paginated<Message>>(
+    return api.get<MessagePageResponse>(
       `/api/v1/conversations/${conversationId}/messages?page=${page}&size=${size}`
     );
   },
@@ -45,7 +45,9 @@ export const messageApi = {
       body: file,
     });
     if (!uploadRes.ok) {
-      throw new Error('Failed to upload file');
+      const details = await uploadRes.text().catch(() => '');
+      const suffix = details ? `: ${details.slice(0, 240)}` : '';
+      throw new Error(`Failed to upload file (${uploadRes.status})${suffix}`);
     }
 
     return prepared;

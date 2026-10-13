@@ -140,6 +140,16 @@ export interface Paginated<T> {
   hasNext: boolean;
 }
 
+export interface MessagePageResponse {
+  messages: Message[];
+  content?: Message[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  hasNext: boolean;
+}
+
 // ─── Call Types ─────────────────────────────────────────────────────────────────
 
 export interface CallResponse {

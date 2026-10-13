@@ -5,7 +5,7 @@ interface MessageInputProps {
   conversationId: number;
   onSend: (content: string) => void;
   onTyping: (typing: boolean) => void;
-  onAttach?: (file: File) => Promise<void> | void;
+  onAttach?: (files: File[]) => Promise<void> | void;
   disabled?: boolean;
 }
 
@@ -64,12 +64,12 @@ export function MessageInput({ conversationId, onSend, onTyping, onAttach, disab
   };
 
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files ?? []);
     e.target.value = '';
-    if (!file || !onAttach || uploading) return;
+    if (files.length === 0 || !onAttach || uploading) return;
     setUploading(true);
     try {
-      await onAttach(file);
+      await onAttach(files);
     } finally {
       setUploading(false);
     }
@@ -87,6 +87,7 @@ export function MessageInput({ conversationId, onSend, onTyping, onAttach, disab
           className="message-file-input"
           type="file"
           accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,application/zip"
+          multiple
           onChange={handleFileChange}
           disabled={disabled || uploading}
         />

@@ -12,4 +12,7 @@ public interface MessageAttachmentRepository extends JpaRepository<MessageAttach
 
     @Query("SELECT ma FROM MessageAttachment ma WHERE ma.messageId = :messageId")
     List<MessageAttachment> findByMessageId(@Param("messageId") Long messageId);
+
+    @Query("SELECT ma FROM MessageAttachment ma WHERE ma.messageId IN :messageIds")
+    List<MessageAttachment> findByMessageIdIn(@Param("messageIds") List<Long> messageIds);
 }

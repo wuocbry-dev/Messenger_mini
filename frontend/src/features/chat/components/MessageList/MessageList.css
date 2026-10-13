@@ -30,6 +30,34 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.message-bubble--media {
+  max-width: min(86%, 340px);
+}
+
+.message-bubble--media.message-bubble--own,
+.message-bubble--media:not(.message-bubble--own) {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  border-radius: 0;
+  color: var(--color-text-primary);
+}
+
+.message-bubble--media.message-bubble--own {
+  align-items: flex-end;
+}
+
+.message-bubble--media.message-bubble--own .message-content {
+  color: var(--color-text-primary);
+}
+
+.message-bubble--media.message-bubble--own .message-time {
+  color: var(--color-text-muted);
 }
 
 .message-row--own .message-bubble {
@@ -99,13 +127,49 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+  max-width: 100%;
+}
+
+.message-image-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(96px, 1fr));
+  gap: 4px;
+  width: min(280px, 100%);
+  max-width: 100%;
+}
+
+.message-image-grid--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.message-image-button {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: rgba(0,0,0,0.08);
+  cursor: pointer;
+}
+
+.message-image-grid--single .message-image-button {
+  aspect-ratio: 4 / 3;
 }
 
 .message-image {
-  max-width: 280px;
-  max-height: 200px;
-  border-radius: var(--radius-lg);
+  width: 100%;
+  height: 100%;
+  display: block;
   object-fit: cover;
+}
+
+.message-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-width: 100%;
 }
 
 .message-file {
@@ -116,6 +180,7 @@
   background: rgba(255,255,255,0.15);
   border-radius: var(--radius-lg);
   min-width: 140px;
+  max-width: 100%;
   border: none;
   color: inherit;
   font: inherit;
@@ -145,6 +210,15 @@
 }
 
 .message-bubble--own .message-file-link {
+  color: white;
+}
+
+.message-bubble--media.message-bubble--own .message-file {
+  background: var(--color-primary);
+  color: white;
+}
+
+.message-bubble--media.message-bubble--own .message-file-link {
   color: white;
 }
 

@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import type { Message, MessageReceipt } from '../../../../shared/types';
+import React, { useEffect, useRef, useState } from 'react';
+import type { Message, MessageAttachment, MessageReceipt } from '../../../../shared/types';
 import { Avatar, EmptyState, Skeleton } from '../../../../shared/components/ui';
 import { messageApi } from '../../api';
 import './MessageList.css';
@@ -31,6 +31,16 @@ function shouldShowDate(prev: Message | null, curr: Message): boolean {
   return new Date(prev.createdAt).toDateString() !== new Date(curr.createdAt).toDateString();
 }
 
+function isImageAttachment(attachment: MessageAttachment): boolean {
+  return attachment.attachmentType === 'IMAGE' || attachment.mimeType?.startsWith('image/') === true;
+}
+
+function formatFileSize(bytes?: number): string | null {
+  if (!bytes) return null;
+  if (bytes > 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
 function ReceiptIcon({ receipt }: { receipt: MessageReceipt }) {
   if (receipt.state === 'READ') {
     return (
@@ -53,12 +63,50 @@ function ReceiptIcon({ receipt }: { receipt: MessageReceipt }) {
 
 export function MessageList({ messages, currentUserId, typingUser, loading }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
-  const prevMessage = useRef<Message | null>(null);
+  const [fileUrls, setFileUrls] = useState<Record<number, string>>({});
 
   const openAttachment = async (fileId: number) => {
     const file = await messageApi.getFile(fileId);
     window.open(file.downloadUrl, '_blank', 'noopener,noreferrer');
   };
+
+  useEffect(() => {
+    const imageFileIds = messages
+      .flatMap((msg) => msg.attachments ?? [])
+      .filter(isImageAttachment)
+      .map((attachment) => attachment.fileId)
+      .filter((fileId) => !fileUrls[fileId]);
+
+    const missingFileIds = Array.from(new Set(imageFileIds));
+    if (missingFileIds.length === 0) return;
+
+    let cancelled = false;
+    void Promise.all(
+      missingFileIds.map(async (fileId) => {
+        try {
+          const file = await messageApi.getFile(fileId);
+          return [fileId, file.downloadUrl] as const;
+        } catch {
+          return null;
+        }
+      })
+    ).then((entries) => {
+      if (cancelled) return;
+      const nextEntries = entries.filter((entry): entry is readonly [number, string] => entry != null);
+      if (nextEntries.length === 0) return;
+      setFileUrls((prev) => {
+        const next = { ...prev };
+        nextEntries.forEach(([fileId, url]) => {
+          next[fileId] = url;
+        });
+        return next;
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [messages, fileUrls]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -95,10 +143,11 @@ export function MessageList({ messages, currentUserId, typingUser, loading }: Me
     <div className="message-list" role="log" aria-live="polite" aria-label="Messages">
       {messages.map((msg, i) => {
         const isOwn = msg.senderId === currentUserId;
-        const showDate = shouldShowDate(prevMessage.current, msg);
-        const senderName = isOwn ? 'You' : msg.senderDisplayName;
-        const attachment = msg.attachments?.[0];
-        prevMessage.current = msg;
+        const showDate = shouldShowDate(messages[i - 1] ?? null, msg);
+        const attachments = msg.attachments ?? [];
+        const imageAttachments = attachments.filter(isImageAttachment);
+        const fileAttachments = attachments.filter((attachment) => !isImageAttachment(attachment));
+        const hasAttachments = imageAttachments.length > 0 || fileAttachments.length > 0;
 
         return (
           <React.Fragment key={msg.id}>
@@ -115,65 +164,72 @@ export function MessageList({ messages, currentUserId, typingUser, loading }: Me
                   size="sm"
                 />
               )}
-              <div className={`message-bubble${isOwn ? ' message-bubble--own' : ''}`}>
+              <div className={`message-bubble${isOwn ? ' message-bubble--own' : ''}${hasAttachments ? ' message-bubble--media' : ''}`}>
                 {!isOwn && (
                   <span className="message-sender">{msg.senderDisplayName}</span>
                 )}
                 {msg.type === 'TEXT' && (
                   <p className="message-content">{msg.content}</p>
                 )}
-                {msg.type === 'IMAGE' && (
+                {imageAttachments.length > 0 && (
                   <div className="message-attachment">
-                    {msg.downloadUrl ? (
-                      <img
-                        src={msg.downloadUrl}
-                        alt={msg.fileName ?? attachment?.originalName ?? 'image'}
-                        className="message-image"
-                        loading="lazy"
-                      />
-                    ) : attachment ? (
+                    <div className={`message-image-grid${imageAttachments.length === 1 ? ' message-image-grid--single' : ''}`}>
+                      {imageAttachments.map((attachment) => {
+                        const url = fileUrls[attachment.fileId] ?? msg.downloadUrl;
+                        return url ? (
+                          <button
+                            key={attachment.id ?? attachment.fileId}
+                            type="button"
+                            className="message-image-button"
+                            onClick={() => void openAttachment(attachment.fileId)}
+                            title={attachment.originalName ?? 'Open image'}
+                          >
+                            <img
+                              src={url}
+                              alt={attachment.originalName ?? msg.fileName ?? 'image'}
+                              className="message-image"
+                              loading="lazy"
+                            />
+                          </button>
+                        ) : (
+                          <button
+                            key={attachment.id ?? attachment.fileId}
+                            type="button"
+                            className="message-file"
+                            onClick={() => void openAttachment(attachment.fileId)}
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                              <circle cx="8.5" cy="8.5" r="1.5" />
+                              <path d="M21 15l-5-5L5 21" />
+                            </svg>
+                            <span className="message-file-link">{attachment.originalName ?? 'Open image'}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {msg.content && <p className="message-content">{msg.content}</p>}
+                  </div>
+                )}
+                {fileAttachments.length > 0 && (
+                  <div className="message-file-list">
+                    {fileAttachments.map((attachment) => (
                       <button
+                        key={attachment.id ?? attachment.fileId}
                         type="button"
                         className="message-file"
                         onClick={() => void openAttachment(attachment.fileId)}
                       >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                          <circle cx="8.5" cy="8.5" r="1.5" />
-                          <path d="M21 15l-5-5L5 21" />
+                          <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+                          <polyline points="13 2 13 9 20 9" />
                         </svg>
-                        <span className="message-file-link">{attachment.originalName ?? 'Open image'}</span>
+                        <span className="message-file-link">{attachment.originalName ?? msg.fileName ?? 'Download file'}</span>
+                        {formatFileSize(attachment.sizeBytes ?? msg.fileSize) && (
+                          <span className="message-file-size">{formatFileSize(attachment.sizeBytes ?? msg.fileSize)}</span>
+                        )}
                       </button>
-                    ) : null}
-                    {msg.content && <p className="message-content">{msg.content}</p>}
-                  </div>
-                )}
-                {msg.type === 'FILE' && (
-                  <div className="message-file">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-                      <polyline points="13 2 13 9 20 9" />
-                    </svg>
-                    {msg.downloadUrl ? (
-                      <a href={msg.downloadUrl} target="_blank" rel="noopener noreferrer" className="message-file-link">
-                        {msg.fileName ?? attachment?.originalName ?? 'Download file'}
-                      </a>
-                    ) : attachment ? (
-                      <button
-                        type="button"
-                        className="message-file-link message-file-button"
-                        onClick={() => void openAttachment(attachment.fileId)}
-                      >
-                        {attachment.originalName ?? 'Download file'}
-                      </button>
-                    ) : null}
-                    {(msg.fileSize ?? attachment?.sizeBytes) && (
-                      <span className="message-file-size">
-                        {(msg.fileSize ?? attachment!.sizeBytes!) > 1024 * 1024
-                          ? `${((msg.fileSize ?? attachment!.sizeBytes!) / 1024 / 1024).toFixed(1)} MB`
-                          : `${Math.round((msg.fileSize ?? attachment!.sizeBytes!) / 1024)} KB`}
-                      </span>
-                    )}
+                    ))}
                   </div>
                 )}
                 <div className="message-meta">

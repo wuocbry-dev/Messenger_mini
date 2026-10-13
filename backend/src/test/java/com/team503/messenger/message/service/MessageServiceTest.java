@@ -12,10 +12,12 @@ import com.team503.messenger.conversation.entity.ConversationMember;
 import com.team503.messenger.conversation.exception.ConversationException;
 import com.team503.messenger.conversation.repository.ConversationMemberRepository;
 import com.team503.messenger.conversation.repository.ConversationRepository;
+import com.team503.messenger.file.entity.StoredFile;
 import com.team503.messenger.message.dto.MessagePageResponse;
 import com.team503.messenger.message.dto.MessageResponse;
 import com.team503.messenger.message.dto.SendMessageRequest;
 import com.team503.messenger.message.entity.Message;
+import com.team503.messenger.message.entity.MessageAttachment;
 import com.team503.messenger.message.entity.MessageReceipt;
 import com.team503.messenger.message.exception.MessageException;
 import com.team503.messenger.message.repository.MessageReceiptRepository;
@@ -145,6 +147,46 @@ class MessageServiceTest {
         verify(messageRepository, never()).save(any(Message.class));
     }
 
+    @Test
+    void sendAttachmentMessageAllowsMissingCaption() {
+        Conversation conv = createConv(1L);
+        User sender = activeUser(1L, "bob", "bob@example.com", "Bob");
+        ConversationMember member = ConversationMember.joinAsOwner(1L, 1L, NOW);
+        StoredFile file = createStoredFile(20L, 1L);
+        MessageAttachment attachment = MessageAttachment.image(10L, 20L);
+        ReflectionTestUtils.setField(attachment, "id", 30L);
+
+        when(storedFileRepository.findById(20L)).thenReturn(Optional.of(file));
+        when(conversationRepository.findById(1L)).thenReturn(Optional.of(conv));
+        when(memberRepository.existsActiveMember(1L, 1L)).thenReturn(true);
+        when(messageRepository.save(any(Message.class))).thenAnswer(inv -> {
+            Message m = inv.getArgument(0);
+            ReflectionTestUtils.setField(m, "id", 10L);
+            return m;
+        });
+        when(conversationRepository.save(any())).thenReturn(conv);
+        when(memberRepository.findActiveByConversationId(1L)).thenReturn(List.of(member));
+        when(attachmentRepository.save(any(MessageAttachment.class))).thenReturn(attachment);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(sender));
+        when(receiptRepository.findByMessageId(10L)).thenReturn(List.of());
+        when(attachmentRepository.findByMessageId(10L)).thenReturn(List.of(attachment));
+        when(storedFileRepository.findAllById(List.of(20L))).thenReturn(List.of(file));
+
+        MessageResponse response = messageService.sendAttachmentMessage(
+                1L,
+                1L,
+                20L,
+                Message.Type.IMAGE,
+                null
+        );
+
+        assertThat(response.id()).isEqualTo(10L);
+        assertThat(response.type()).isEqualTo("IMAGE");
+        assertThat(response.content()).isNull();
+        assertThat(response.attachments()).hasSize(1);
+        assertThat(response.attachments().get(0).fileId()).isEqualTo(20L);
+    }
+
     // --- listMessages ---
 
     @Test
@@ -152,13 +194,18 @@ class MessageServiceTest {
         User bob = activeUser(1L, "bob", "bob@example.com", "Bob");
 
         Message m1 = createMessage(1L, 10L, 1L, "Hello", NOW);
-        Message m2 = createMessage(1L, 11L, 2L, "Hi bob", NOW.minusMinutes(5));
+        Message m2 = createImageMessage(1L, 11L, 2L, NOW.minusMinutes(5));
+        MessageAttachment attachment = MessageAttachment.image(11L, 20L);
+        ReflectionTestUtils.setField(attachment, "id", 30L);
+        StoredFile file = createStoredFile(20L, 2L);
 
         when(conversationRepository.existsById(1L)).thenReturn(true);
         when(memberRepository.existsActiveMember(1L, 1L)).thenReturn(true);
         when(messageRepository.findByConversationIdOrderByCreatedAtDesc(any(), any()))
                 .thenReturn(new PageImpl<>(List.of(m1, m2)));
         when(userRepository.findAllById(any())).thenReturn(List.of(bob, activeUser(2L, "alice", "alice@example.com", "Alice")));
+        when(attachmentRepository.findByMessageIdIn(List.of(10L, 11L))).thenReturn(List.of(attachment));
+        when(storedFileRepository.findAllById(List.of(20L))).thenReturn(List.of(file));
 
         MessagePageResponse response = messageService.listMessages(1L, 1L, 0, 20);
 
@@ -166,6 +213,8 @@ class MessageServiceTest {
         assertThat(response.page()).isEqualTo(0);
         assertThat(response.totalElements()).isEqualTo(2);
         assertThat(response.hasNext()).isFalse();
+        assertThat(response.messages().get(1).attachments()).hasSize(1);
+        assertThat(response.messages().get(1).attachments().get(0).fileId()).isEqualTo(20L);
     }
 
     @Test
@@ -249,5 +298,26 @@ class MessageServiceTest {
         Message m = Message.text(convId, senderId, content, createdAt);
         ReflectionTestUtils.setField(m, "id", id);
         return m;
+    }
+
+    private Message createImageMessage(Long convId, Long id, Long senderId, LocalDateTime createdAt) {
+        Message m = Message.of(convId, senderId, Message.Type.IMAGE, null, createdAt);
+        ReflectionTestUtils.setField(m, "id", id);
+        return m;
+    }
+
+    private StoredFile createStoredFile(Long id, Long uploaderId) {
+        StoredFile file = StoredFile.create(
+                uploaderId,
+                "messenger/u" + uploaderId + "/photo.png",
+                "photo.png",
+                "image/png",
+                1024L,
+                null,
+                null,
+                NOW
+        );
+        ReflectionTestUtils.setField(file, "id", id);
+        return file;
     }
 }

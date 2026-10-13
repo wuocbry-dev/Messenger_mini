@@ -57,7 +57,7 @@ public class Message {
     }
 
     public static Message of(Long conversationId, Long senderId, Type type, String content, LocalDateTime createdAt) {
-        return new Message(conversationId, senderId, type.name(), content.trim(), createdAt);
+        return new Message(conversationId, senderId, type.name(), content == null ? null : content.trim(), createdAt);
     }
 
     public Long getId() {

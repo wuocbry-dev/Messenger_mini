@@ -8,6 +8,8 @@ import {
 import { useWebSocket } from '../shared/hooks/useWebSocket';
 import { conversationApi } from '../features/chat/api/conversationApi';
 import { authApi } from '../features/auth/api/authApi';
+import { clearAuth } from '../features/auth/store/authStore';
+import { ApiRequestError } from '../shared/api';
 import { ToastContainer, type ToastData } from '../shared/components/ui/Toast';
 import type {
   Conversation,
@@ -68,9 +70,11 @@ export function MessengerPage() {
 
   // Load current user
   useEffect(() => {
+    let cancelled = false;
     authApi
       .me()
       .then((u) => {
+        if (cancelled) return;
         setUser({
           id: u.id,
           username: u.username,
@@ -82,8 +86,19 @@ export function MessengerPage() {
           username: u.username,
         });
       })
-      .catch(() => navigate('/auth'));
-  }, [navigate]);
+      .catch((err) => {
+        if (cancelled) return;
+        if (err instanceof ApiRequestError && err.status === 401) {
+          clearAuth();
+          navigate('/auth', { replace: true });
+          return;
+        }
+        addToast('error', err instanceof Error ? err.message : 'Failed to load your profile');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [addToast, navigate]);
 
   // Load conversations
   const loadConversations = useCallback(() => {

@@ -7,6 +7,7 @@ import com.team503.messenger.message.dto.SendAttachmentRequest;
 import com.team503.messenger.message.dto.SendMessageRequest;
 import com.team503.messenger.message.entity.Message;
 import com.team503.messenger.message.exception.MessageException;
+import com.team503.messenger.message.service.MessageRealtimePublisher;
 import com.team503.messenger.message.service.MessageService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -24,9 +25,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class MessageController {
 
     private final MessageService messageService;
+    private final MessageRealtimePublisher realtimePublisher;
 
-    public MessageController(MessageService messageService) {
+    public MessageController(MessageService messageService, MessageRealtimePublisher realtimePublisher) {
         this.messageService = messageService;
+        this.realtimePublisher = realtimePublisher;
     }
 
     @PostMapping("/conversations/{conversationId}/messages")
@@ -59,13 +62,15 @@ public class MessageController {
                     "type must be IMAGE or FILE"
             );
         }
-        return messageService.sendAttachmentMessage(
+        MessageResponse response = messageService.sendAttachmentMessage(
                 currentUser.id(),
                 conversationId,
                 request.fileId(),
                 type,
                 request.content()
         );
+        realtimePublisher.publishToConversation(conversationId, response);
+        return response;
     }
 
     @GetMapping("/conversations/{conversationId}/messages")

@@ -54,7 +54,8 @@ export function ChatPanel({
     messageApi
       .list(activeConversation.id, { page: 0, size: 50 })
       .then((res) => {
-        if (!cancelled) setMessages([...res.content].reverse());
+        const pageMessages = res.messages ?? res.content ?? [];
+        if (!cancelled) setMessages([...pageMessages].reverse());
       })
       .catch(console.error)
       .finally(() => {
@@ -185,13 +186,15 @@ export function ChatPanel({
   );
 
   const handleAttach = useCallback(
-    async (file: File) => {
+    async (files: File[]) => {
       if (!activeConversation) return;
       try {
-        const uploaded = await messageApi.uploadAttachment(file);
-        const type = file.type.startsWith('image/') ? 'IMAGE' : 'FILE';
-        const message = await messageApi.sendAttachment(activeConversation.id, uploaded.fileId, type);
-        setMessages((prev) => [...prev, message]);
+        for (const file of files) {
+          const uploaded = await messageApi.uploadAttachment(file);
+          const type = file.type.startsWith('image/') ? 'IMAGE' : 'FILE';
+          const message = await messageApi.sendAttachment(activeConversation.id, uploaded.fileId, type);
+          setMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, message]));
+        }
         onRefreshConversations();
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to send file';

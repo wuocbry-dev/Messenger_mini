@@ -6,6 +6,18 @@ import type { ApiError } from '../types';
 
 const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
 
+export class ApiRequestError extends Error {
+  readonly status: number;
+  readonly code?: string;
+
+  constructor(status: number, message: string, code?: string) {
+    super(message);
+    this.name = 'ApiRequestError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
 function getToken(): string | null {
   return sessionStorage.getItem('accessToken');
 }
@@ -34,11 +46,15 @@ async function request<T>(
     return undefined as T;
   }
 
-  const data = await res.json();
+  const data = await res.json().catch(() => null);
 
   if (!res.ok) {
-    const err: ApiError = data;
-    throw new Error(err.message ?? err.code ?? 'Request failed');
+    const err = data as ApiError | null;
+    throw new ApiRequestError(
+      res.status,
+      err?.message ?? err?.code ?? 'Request failed',
+      err?.code
+    );
   }
 
   return data as T;

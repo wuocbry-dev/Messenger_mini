@@ -12,11 +12,20 @@ export interface AuthState {
 }
 
 export const AUTH_TOKEN_KEY = 'accessToken';
+const AUTH_USER_KEY = 'authUser';
+const REFRESH_TOKEN_KEY = 'refreshToken';
 
 export function loadAuthFromStorage(): AuthState {
   const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
-  const userRaw = sessionStorage.getItem('authUser');
-  const user = userRaw ? (JSON.parse(userRaw) as User) : null;
+  const userRaw = sessionStorage.getItem(AUTH_USER_KEY);
+  let user: User | null = null;
+  if (userRaw) {
+    try {
+      user = JSON.parse(userRaw) as User;
+    } catch {
+      clearAuth();
+    }
+  }
   return {
     user,
     accessToken: token,
@@ -26,12 +35,13 @@ export function loadAuthFromStorage(): AuthState {
 
 export function saveAuth(token: string, user: User): void {
   sessionStorage.setItem(AUTH_TOKEN_KEY, token);
-  sessionStorage.setItem('authUser', JSON.stringify(user));
+  sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
 }
 
 export function clearAuth(): void {
   sessionStorage.removeItem(AUTH_TOKEN_KEY);
-  sessionStorage.removeItem('authUser');
+  sessionStorage.removeItem(AUTH_USER_KEY);
+  sessionStorage.removeItem(REFRESH_TOKEN_KEY);
 }
 
 export const AuthContext = createContext<AuthState>(loadAuthFromStorage());

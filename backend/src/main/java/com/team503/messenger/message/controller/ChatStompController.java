@@ -1,22 +1,14 @@
 package com.team503.messenger.message.controller;
 
 import com.team503.messenger.auth.security.AuthenticatedUser;
-import com.team503.messenger.conversation.entity.ConversationMember;
-import com.team503.messenger.conversation.repository.ConversationMemberRepository;
 import com.team503.messenger.message.dto.MessageResponse;
 import com.team503.messenger.message.dto.SendChatMessageRequest;
+import com.team503.messenger.message.service.MessageRealtimePublisher;
 import com.team503.messenger.message.service.MessageService;
-import com.team503.messenger.user.entity.User;
-import com.team503.messenger.user.repository.UserRepository;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 
@@ -44,20 +36,14 @@ public class ChatStompController {
     private static final Logger log = LoggerFactory.getLogger(ChatStompController.class);
 
     private final MessageService messageService;
-    private final ConversationMemberRepository memberRepository;
-    private final UserRepository userRepository;
-    private final SimpMessagingTemplate messagingTemplate;
+    private final MessageRealtimePublisher realtimePublisher;
 
     public ChatStompController(
             MessageService messageService,
-            ConversationMemberRepository memberRepository,
-            UserRepository userRepository,
-            SimpMessagingTemplate messagingTemplate
+            MessageRealtimePublisher realtimePublisher
     ) {
         this.messageService = messageService;
-        this.memberRepository = memberRepository;
-        this.userRepository = userRepository;
-        this.messagingTemplate = messagingTemplate;
+        this.realtimePublisher = realtimePublisher;
     }
 
     @MessageMapping("/chat.send")
@@ -78,24 +64,6 @@ public class ChatStompController {
                 payload.content()
         );
 
-        // Publish to all active members of the conversation so both the
-        // sender (UI confirmation) and the recipient (live update) receive
-        // the persisted payload.
-        List<ConversationMember> members = memberRepository.findActiveByConversationId(payload.conversationId());
-        Set<Long> memberIds = members.stream().map(ConversationMember::getUserId).collect(Collectors.toSet());
-
-        Map<Long, String> usernames = userRepository.findAllById(memberIds).stream()
-                .collect(Collectors.toMap(User::getId, User::getUsername));
-
-        for (ConversationMember member : members) {
-            String username = usernames.get(member.getUserId());
-            if (username != null) {
-                messagingTemplate.convertAndSendToUser(
-                        username,
-                        "/queue/messages",
-                        response
-                );
-            }
-        }
+        realtimePublisher.publishToConversation(payload.conversationId(), response);
     }
 }

@@ -1,6 +1,6 @@
 import { api } from '../../../shared/api';
 import type { User } from '../../../shared/types';
-import { saveAuth, AUTH_TOKEN_KEY } from '../store/authStore';
+import { saveAuth } from '../store/authStore';
 
 export interface LoginRequest {
   usernameOrEmail: string;
@@ -45,7 +45,12 @@ export const authApi = {
 
   getCurrentUser(): User | null {
     const raw = sessionStorage.getItem('authUser');
-    return raw ? (JSON.parse(raw) as User) : null;
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as User;
+    } catch {
+      return null;
+    }
   },
 
   persistLogin(response: AuthResponse): void {

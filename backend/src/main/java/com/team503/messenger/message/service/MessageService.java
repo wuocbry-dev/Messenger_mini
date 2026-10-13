@@ -218,15 +218,51 @@ public class MessageService {
         Map<Long, User> senderMap = userRepository.findAllById(senderIds).stream()
                 .collect(Collectors.toMap(User::getId, u -> u));
 
-        // We don't load attachments for the page response in this slice — the
-        // REST endpoint can fetch per-message details. The STOMP contract
-        // already provides the full MessageResponse for live messages.
+        List<Long> messageIds = messagePage.getContent().stream()
+                .map(Message::getId)
+                .toList();
+        Map<Long, List<MessageAttachment>> attachmentsByMessageId = messageIds.isEmpty()
+                ? Map.of()
+                : attachmentRepository
+                        .findByMessageIdIn(messageIds)
+                        .stream()
+                        .collect(Collectors.groupingBy(MessageAttachment::getMessageId));
+        List<Long> fileIds = attachmentsByMessageId.values().stream()
+                .flatMap(List::stream)
+                .map(MessageAttachment::getFileId)
+                .distinct()
+                .toList();
+        Map<Long, StoredFile> fileMap = storedFileRepository.findAllById(fileIds).stream()
+                .collect(Collectors.toMap(StoredFile::getId, f -> f));
+
         List<MessageResponse> responses = messagePage.getContent().stream()
                 .map(m -> {
                     User sender = senderMap.get(m.getSenderId());
                     String username = sender != null ? sender.getUsername() : "?";
                     String displayName = sender != null ? sender.getDisplayName() : "?";
-                    return MessageResponse.from(m, username, displayName, List.of());
+                    List<MessageAttachmentResponse> attachmentResponses = attachmentsByMessageId
+                            .getOrDefault(m.getId(), List.of())
+                            .stream()
+                            .map(ma -> {
+                                StoredFile file = fileMap.get(ma.getFileId());
+                                String mimeType = file != null ? file.getMimeType() : null;
+                                String originalName = file != null ? file.getOriginalName() : null;
+                                Long sizeBytes = file != null ? file.getSizeBytes() : null;
+                                return MessageAttachmentResponse.from(ma, mimeType, originalName, sizeBytes);
+                            })
+                            .toList();
+                    return new MessageResponse(
+                            m.getId(),
+                            m.getConversationId(),
+                            m.getSenderId(),
+                            username,
+                            displayName,
+                            m.getType(),
+                            m.getContent(),
+                            m.getCreatedAt(),
+                            List.of(),
+                            attachmentResponses
+                    );
                 })
                 .toList();
 
