@@ -225,3 +225,39 @@
     min-height: 48px;
   }
 }
+
+/* Notifications section */
+.settings-form + .settings-section {
+  margin-top: var(--space-6);
+}
+
+.settings-alerts {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.settings-alerts-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings-alerts-title {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.settings-alerts-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  .settings-form + .settings-section {
+    margin-top: var(--space-4);
+  }
+}

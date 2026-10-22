@@ -1,6 +1,7 @@
 package com.team503.messenger.call.service;
 
 import com.team503.messenger.call.config.AgoraProperties;
+import com.team503.messenger.call.dto.ActiveCallsResponse;
 import com.team503.messenger.call.dto.CallEvent;
 import com.team503.messenger.call.dto.CallEvent.EventType;
 import com.team503.messenger.call.dto.CallHistoryResponse;
@@ -226,6 +227,44 @@ public class CallService {
         return toResponse(call);
     }
 
+    /**
+     * Joins a call that is already in progress, e.g. a group call the user
+     * missed or left. Someone still being rung simply accepts it.
+     */
+    @Transactional
+    public CallResponse joinCall(Long userId, Long callId) {
+        Call call = loadActive(callId);
+        CallParticipant mine = participantRepository.findByCallIdAndUserId(callId, userId).orElse(null);
+        if (mine != null && mine.isIn(State.INVITED)) {
+            return acceptCall(userId, callId);
+        }
+        if (mine != null && mine.isIn(State.JOINED)) {
+            return toResponse(call);
+        }
+        if (call.getStatus() != Call.Status.ACCEPTED) {
+            throw new CallException(HttpStatus.CONFLICT, "CALL_NOT_IN_PROGRESS",
+                    "Nobody has joined this call yet");
+        }
+        requireMember(call.getConversationId(), userId, "joiner");
+        if (isBusy(userId)) {
+            throw new CallException(HttpStatus.CONFLICT, "CALLER_BUSY", "You are already in a call");
+        }
+        long present = participantRepository.findByCallId(callId).stream()
+                .filter(p -> p.isIn(State.INVITED, State.JOINED)).count();
+        if (present >= MAX_PARTICIPANTS) {
+            throw new CallException(HttpStatus.CONFLICT, "CALL_FULL",
+                    "A call supports at most " + MAX_PARTICIPANTS + " people");
+        }
+        LocalDateTime now = LocalDateTime.now(clock);
+        if (mine != null) {
+            mine.rejoin(now);
+        } else {
+            participantRepository.save(CallParticipant.joiner(callId, userId, now));
+        }
+        publish(EventType.PARTICIPANT_JOINED, call, userId, everyone(callId));
+        return toResponse(call);
+    }
+
     // ---------- during the call ----------
 
     /**
@@ -400,6 +439,42 @@ public class CallService {
             late++;
         }
         return stale.size() + late;
+    }
+
+    // ---------- catching up ----------
+
+    /**
+     * What a client that just came online must show: calls still ringing for
+     * this user (within the ring timeout) and calls in progress in their
+     * conversations that they are not part of right now.
+     */
+    @Transactional(readOnly = true)
+    public ActiveCallsResponse listActive(Long userId) {
+        LocalDateTime ringStart = LocalDateTime.now(clock).minusSeconds(agoraProperties.getRingTimeoutSeconds());
+        List<Call> ringing = callRepository.findForParticipantInState(userId, State.INVITED, ACTIVE);
+        List<Call> running = callRepository.findInConversationsOfUser(userId, Call.Status.ACCEPTED);
+
+        List<Long> ids = new ArrayList<>();
+        ringing.forEach(c -> ids.add(c.getId()));
+        running.forEach(c -> ids.add(c.getId()));
+        Map<Long, List<CallParticipant>> byCall = ids.isEmpty() ? Map.of() : participantRepository
+                .findByCallIds(ids).stream()
+                .collect(Collectors.groupingBy(CallParticipant::getCallId));
+
+        List<Call> stillRinging = ringing.stream()
+                .filter(c -> byCall.getOrDefault(c.getId(), List.of()).stream().anyMatch(p ->
+                        p.getUserId().equals(userId) && !p.getInvitedAt().isBefore(ringStart)))
+                .toList();
+        List<Call> joinable = running.stream()
+                .filter(c -> {
+                    List<CallParticipant> ps = byCall.getOrDefault(c.getId(), List.of());
+                    boolean imIn = ps.stream().anyMatch(p ->
+                            p.getUserId().equals(userId) && p.isIn(State.INVITED, State.JOINED));
+                    long present = ps.stream().filter(p -> p.isIn(State.INVITED, State.JOINED)).count();
+                    return !imIn && present < MAX_PARTICIPANTS;
+                })
+                .toList();
+        return new ActiveCallsResponse(toResponses(stillRinging), toResponses(joinable));
     }
 
     // ---------- history ----------

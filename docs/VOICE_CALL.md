@@ -252,3 +252,14 @@ Every finished call is also recorded in its conversation's message timeline, so 
 - The message is published after commit on the normal `/user/queue/messages` queue, so open chats and the conversation list update in real time. It creates receipts for the other members like any message.
 - `MessageResponse.call` (`MessageCallResponse`) carries `callType`, `status`, `callerId`, start/answer/end times, `durationSeconds` (null if nobody answered), `groupCall` and `joinedCount`. The client words it per viewer: the caller sees "Voice call · No answer", the other person sees a red "Missed voice call", and so on. Each entry has "Call back" / "Call again", which starts a new call of the same type.
 - Clients cannot send `CALL` or `SYSTEM` messages; `/app/chat.send` turns those types into TEXT.
+
+## Catching up after being offline, and joining later
+
+Realtime call events reach only connected clients, so the client also asks the server what it missed.
+
+- `GET /api/v1/calls/active` returns `ringing` (calls still ringing for me, within the ring timeout) and `joinable` (ACCEPTED calls in my conversations that I am not in, with room left). The client calls it on every WebSocket (re)connect, when the tab becomes visible, after call roster events, and when a CALL message arrives.
+  - A `ringing` call opens the normal incoming-call screen, so someone who opens the app while being rung sees the call.
+  - A `joinable` call shows "Call in progress · tap to join" in the chat list, and a Join banner in that chat.
+- `POST /api/v1/calls/{id}/join` puts a conversation member into a running call. They may have missed it, declined it, left it, or not been rung (for example, busy at the time). Someone still being rung simply accepts. It needs an ACCEPTED call, an active membership, not being busy, and room under the participant limit. Everyone in the call gets `PARTICIPANT_JOINED`.
+- `CallProvider` lives in `AppLayout`, above the routes. An incoming call rings on every page, and a call in progress survives moving between Chat, Users, Calls and Settings. The call panel is portalled into the main pane.
+- While the app is in the background, an incoming call also shows a system notification, if the user turned on call alerts in Settings. This needs the page to be open (a background tab or app). Alerting a user who has closed the app would need Web Push (service worker, VAPID keys and a server push library), which is not part of the approved stack.

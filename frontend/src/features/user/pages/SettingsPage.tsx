@@ -3,7 +3,7 @@ import { Avatar } from '../../../shared/components/ui/Avatar';
 import { Button } from '../../../shared/components/ui/Button';
 import { Input } from '../../../shared/components/ui/Input';
 import { Alert } from '../../../shared/components/ui/Alert';
-import { ToastContainer, type ToastData } from '../../../shared/components/ui/Toast';
+import { showToast, type ToastData } from '../../../shared/components/ui/Toast';
 import { uploadFile } from '../../../shared/api';
 import { authApi } from '../../auth/api/authApi';
 import { updateStoredUser } from '../../auth/store/authStore';
@@ -14,8 +14,48 @@ const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 const AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 const MAX_NAME_LENGTH = 100;
 
-function generateId() {
-  return Math.random().toString(36).slice(2);
+type AlertPermission = NotificationPermission | 'unsupported';
+
+function notificationPermission(): AlertPermission {
+  return typeof Notification === 'undefined' ? 'unsupported' : Notification.permission;
+}
+
+/** Lets the browser show incoming calls while the app is in the background. */
+function CallAlertsSetting() {
+  const [permission, setPermission] = useState<AlertPermission>(notificationPermission);
+
+  const enable = async () => {
+    try {
+      setPermission(await Notification.requestPermission());
+    } catch {
+      setPermission(notificationPermission());
+    }
+  };
+
+  return (
+    <div className="settings-section">
+      <h2 className="settings-section-title">Notifications</h2>
+      <div className="settings-alerts">
+        <div className="settings-alerts-text">
+          <span className="settings-alerts-title">Incoming call alerts</span>
+          <span className="settings-alerts-hint">
+            {permission === 'granted'
+              ? 'On. A notification appears when someone calls while this app is in the background.'
+              : permission === 'denied'
+              ? 'Blocked. Allow notifications for this site in your browser settings.'
+              : permission === 'unsupported'
+              ? 'Not available in this browser. On iPhone, add the app to your Home Screen first.'
+              : 'Get a notification when someone calls while this app is in the background.'}
+          </span>
+        </div>
+        {permission === 'default' && (
+          <Button type="button" variant="secondary" size="sm" onClick={() => void enable()}>
+            Turn on
+          </Button>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export function SettingsPage() {
@@ -23,7 +63,6 @@ export function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [toasts, setToasts] = useState<ToastData[]>([]);
   const [displayName, setDisplayName] = useState('');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -31,11 +70,7 @@ export function SettingsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const addToast = useCallback((type: ToastData['type'], message: string) => {
-    setToasts((prev) => [...prev, { id: generateId(), type, message }]);
-  }, []);
-
-  const removeToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
+    showToast(type, message);
   }, []);
 
   useEffect(() => {
@@ -235,8 +270,9 @@ export function SettingsPage() {
             </Button>
           </div>
         </form>
+
+        <CallAlertsSetting />
       </div>
-      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );
 }

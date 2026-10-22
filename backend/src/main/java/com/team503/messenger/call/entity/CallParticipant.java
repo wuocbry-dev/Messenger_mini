@@ -64,6 +64,23 @@ public class CallParticipant {
         return new CallParticipant(callId, userId, State.INVITED, invitedBy, now);
     }
 
+    /** Someone who joins a running call on their own, without being rung. */
+    public static CallParticipant joiner(Long callId, Long userId, LocalDateTime now) {
+        return new CallParticipant(callId, userId, State.JOINED, null, now);
+    }
+
+    /** Joins a running call again after having declined, missed or left it. */
+    public void rejoin(LocalDateTime now) {
+        if (state == State.INVITED || state == State.JOINED) {
+            throw new IllegalStateException("Participant is already in the call");
+        }
+        this.state = State.JOINED;
+        if (this.joinedAt == null) {
+            this.joinedAt = now;
+        }
+        this.leftAt = null;
+    }
+
     public void join(LocalDateTime now) {
         require(State.INVITED);
         this.state = State.JOINED;

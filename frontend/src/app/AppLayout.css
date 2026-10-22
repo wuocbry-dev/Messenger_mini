@@ -81,9 +81,10 @@
     padding-top: env(safe-area-inset-top);
   }
 
-  /* Immersive screens (open chat, any active call) and the on-screen keyboard hide the tabs. */
+  /* Immersive screens (open chat, full-screen call) and the on-screen keyboard
+     hide the tabs. A minimized call keeps them: calls survive changing tabs. */
   .app-layout:has(.chat-panel--detail) .mobile-tabbar,
-  .app-layout:has(.active-call) .mobile-tabbar,
+  .app-layout:has(.active-call--panel) .mobile-tabbar,
   .app-layout:has(.app-main input:focus) .mobile-tabbar,
   .app-layout:has(.app-main textarea:focus) .mobile-tabbar {
     display: none;

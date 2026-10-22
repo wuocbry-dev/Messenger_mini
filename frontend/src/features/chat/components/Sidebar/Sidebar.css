@@ -182,3 +182,9 @@
     -webkit-tap-highlight-color: transparent;
   }
 }
+
+/* "Call in progress" replaces the last-message preview. */
+.conversation-item-preview--call {
+  color: var(--color-success);
+  font-weight: var(--font-weight-semibold);
+}

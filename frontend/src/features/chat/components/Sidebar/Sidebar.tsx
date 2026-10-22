@@ -15,6 +15,8 @@ interface SidebarProps {
   onlineUsers: Set<number>;
   loading: boolean;
   onRefresh: () => void;
+  /** Conversations with a call running that I can join. */
+  ongoingCallConversationIds?: Set<number>;
 }
 
 export function Sidebar({
@@ -25,6 +27,7 @@ export function Sidebar({
   onlineUsers,
   loading,
   onRefresh,
+  ongoingCallConversationIds,
 }: SidebarProps) {
   const [showNewConv, setShowNewConv] = useState(false);
   const [showNewGroup, setShowNewGroup] = useState(false);
@@ -140,7 +143,11 @@ export function Sidebar({
                   <span className="conversation-item-name truncate">
                     {getConversationName(conv)}
                   </span>
-                  {conv.lastMessage && (
+                  {ongoingCallConversationIds?.has(conv.id) ? (
+                    <span className="conversation-item-preview conversation-item-preview--call truncate">
+                      Call in progress · tap to join
+                    </span>
+                  ) : conv.lastMessage && (
                     <span className="conversation-item-preview truncate">
                       {conv.lastMessage.type === 'CALL' && conv.lastMessage.call
                         ? callPreview(conv.lastMessage.call, currentUserId)

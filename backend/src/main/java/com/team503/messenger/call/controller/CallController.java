@@ -1,6 +1,7 @@
 package com.team503.messenger.call.controller;
 
 import com.team503.messenger.auth.security.AuthenticatedUser;
+import com.team503.messenger.call.dto.ActiveCallsResponse;
 import com.team503.messenger.call.dto.CallHistoryResponse;
 import com.team503.messenger.call.dto.CallResponse;
 import com.team503.messenger.call.dto.CallTokenResponse;
@@ -77,6 +78,17 @@ public class CallController {
     @PostMapping("/{callId}/token")
     CallTokenResponse issueToken(@AuthenticationPrincipal AuthenticatedUser currentUser, @PathVariable Long callId) {
         return callService.issueToken(currentUser.id(), callId);
+    }
+
+    @PostMapping("/{callId}/join")
+    CallResponse joinCall(@AuthenticationPrincipal AuthenticatedUser currentUser, @PathVariable Long callId) {
+        return callService.joinCall(currentUser.id(), callId);
+    }
+
+    /** Calls ringing for me or running in my conversations, for clients that were offline. */
+    @GetMapping("/active")
+    ActiveCallsResponse listActive(@AuthenticationPrincipal AuthenticatedUser currentUser) {
+        return callService.listActive(currentUser.id());
     }
 
     @GetMapping("/{callId}")

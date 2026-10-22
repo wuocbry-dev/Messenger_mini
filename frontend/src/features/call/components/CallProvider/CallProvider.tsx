@@ -8,6 +8,8 @@
  * by the websocket hook, which keeps this provider independent of the socket.
  */
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
+import { useRealtime } from '../../../../shared/realtime/RealtimeProvider';
 import type { CallEvent, CallParticipant, CallResponse } from '../../../../shared/types';
 import { callApi } from '../../api/callApi';
 import { useAgora, type CallMedia } from '../../hooks/useAgora';
@@ -47,6 +49,9 @@ interface CallContextValue {
   acceptIncoming: () => Promise<void>;
   rejectIncoming: () => Promise<void>;
   endActiveCall: () => Promise<void>;
+  /** Calls in progress in my conversations that I can join (e.g. a group call I missed). */
+  joinableCalls: CallResponse[];
+  joinCall: (callId: number, options?: StartCallOptions) => Promise<void>;
 }
 
 const CallContext = createContext<CallContextValue>({
@@ -56,6 +61,8 @@ const CallContext = createContext<CallContextValue>({
   acceptIncoming: async () => {},
   rejectIncoming: async () => {},
   endActiveCall: async () => {},
+  joinableCalls: [],
+  joinCall: async () => {},
 });
 
 export function useCall(): CallContextValue {
@@ -80,6 +87,31 @@ function fromResponse(call: CallResponse, isInitiator: boolean, extra?: StartCal
   };
 }
 
+/** A call that is still ringing for me, in the shape of the realtime INCOMING event. */
+function incomingFromResponse(call: CallResponse): CallEvent {
+  return {
+    type: 'INCOMING',
+    callId: call.id,
+    conversationId: call.conversationId,
+    callerId: call.callerId,
+    actorId: call.callerId,
+    callType: call.callType,
+    status: call.status,
+    agoraChannelName: call.agoraChannelName,
+    startedAt: call.startedAt,
+    answeredAt: call.answeredAt,
+    endedAt: call.endedAt,
+    endReason: call.endReason,
+    participants: call.participants,
+  };
+}
+
+/** Events after which the set of calls I could join may have changed. */
+const ROSTER_EVENTS: ReadonlySet<CallEvent['type']> = new Set([
+  'ACCEPTED', 'REJECTED', 'CANCELLED', 'MISSED', 'ENDED',
+  'PARTICIPANT_INVITED', 'PARTICIPANT_JOINED', 'PARTICIPANT_LEFT', 'PARTICIPANT_DECLINED', 'CONVERSATION_CHANGED',
+]);
+
 function openConversation(id: number): void {
   document.dispatchEvent(new CustomEvent<number>(OPEN_CONVERSATION_EVENT, { detail: id }));
 }
@@ -89,10 +121,12 @@ interface Props {
   getUserName: (userId: number) => string;
   getUserAvatar: (userId: number) => string | undefined;
   onError?: (message: string) => void;
+  /** Element the call panel is rendered into (the app's main pane). */
+  panelHost?: HTMLElement | null;
   children: React.ReactNode;
 }
 
-export function CallProvider({ currentUserId, getUserName, getUserAvatar, onError, children }: Props) {
+export function CallProvider({ currentUserId, getUserName, getUserAvatar, onError, panelHost, children }: Props) {
   const [incomingCall, setIncomingCall] = useState<CallEvent | null>(null);
   const [activeCall, setActiveCall] = useState<ActiveCallInfo | null>(null);
   const {
@@ -206,6 +240,81 @@ export function CallProvider({ currentUserId, getUserName, getUserAvatar, onErro
     await leave();
   }, [leave, handleError, currentUserId]);
 
+  // Catching up after being offline. Realtime events reach only connected
+  // clients, so someone who opens the app while a call is ringing for them, or
+  // while a group call is running, asks the server what they missed.
+  const [joinableCalls, setJoinableCalls] = useState<CallResponse[]>([]);
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const refreshActive = useCallback(async () => {
+    try {
+      const res = await callApi.active();
+      setJoinableCalls(res.joinable);
+      const ring = res.ringing[0];
+      if (ring && !activeCallRef.current && !incomingCallRef.current) {
+        setIncomingCall(incomingFromResponse(ring));
+      }
+    } catch {
+      /* offline or signed out: the next trigger tries again */
+    }
+  }, []);
+
+  const scheduleRefresh = useCallback(() => {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    refreshTimer.current = setTimeout(() => void refreshActive(), 300);
+  }, [refreshActive]);
+
+  useEffect(() => () => {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+  }, []);
+
+  // On first connect and after every reconnect.
+  const { status: wsStatus } = useRealtime();
+  useEffect(() => {
+    if (wsStatus === 'connected') void refreshActive();
+  }, [wsStatus, refreshActive]);
+
+  // Back to the tab or app (phones suspend background tabs).
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') scheduleRefresh();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [scheduleRefresh]);
+
+  // A CALL message in any chat means a call finished there.
+  useEffect(() => {
+    const onMessage = (e: Event) => {
+      if ((e as CustomEvent<{ type?: string }>).detail?.type === 'CALL') scheduleRefresh();
+    };
+    document.addEventListener('chat:stomp-message', onMessage);
+    return () => document.removeEventListener('chat:stomp-message', onMessage);
+  }, [scheduleRefresh]);
+
+  const joinCall = useCallback(
+    async (callId: number, options?: StartCallOptions) => {
+      if (activeCallRef.current) return;
+      try {
+        const call = await callApi.join(callId);
+        setIncomingCall((prev) => (prev?.callId === callId ? null : prev));
+        setJoinableCalls((prev) => prev.filter((c) => c.id !== callId));
+        setActiveCall(fromResponse(call, false, options));
+        try {
+          await joinChannel(call.id, call.callType);
+        } catch (err) {
+          void callApi.end(call.id).catch(() => {});
+          throw err;
+        }
+      } catch (err) {
+        handleError(err);
+        setActiveCall(null);
+        scheduleRefresh();
+      }
+    },
+    [joinChannel, handleError, scheduleRefresh]
+  );
+
   /** Rings more people; errors are shown by the dialog that asked. */
   const inviteToCall = useCallback(async (userIds: number[]) => {
     const call = activeCallRef.current;
@@ -252,6 +361,7 @@ export function CallProvider({ currentUserId, getUserName, getUserAvatar, onErro
     const handler = (e: Event) => {
       const event = (e as CustomEvent<CallEvent>).detail;
       if (!event?.type) return;
+      if (ROSTER_EVENTS.has(event.type)) scheduleRefresh();
 
       const active = activeCallRef.current;
       const incoming = incomingCallRef.current;
@@ -269,7 +379,9 @@ export function CallProvider({ currentUserId, getUserName, getUserAvatar, onErro
         const answeredElsewhere =
           event.actorId === currentUserId &&
           (event.type === 'ACCEPTED' || event.type === 'PARTICIPANT_JOINED');
-        if (TERMINAL.has(event.type) || answeredElsewhere) {
+        // e.g. my ringing timed out while the group call carries on.
+        const stillRingingMe = event.participants.some((p) => p.userId === currentUserId && p.state === 'INVITED');
+        if (TERMINAL.has(event.type) || answeredElsewhere || !stillRingingMe) {
           setIncomingCall(null);
         } else {
           setIncomingCall({ ...event, type: 'INCOMING' });
@@ -297,7 +409,7 @@ export function CallProvider({ currentUserId, getUserName, getUserAvatar, onErro
     };
     document.addEventListener(CALL_EVENT_NAME, handler);
     return () => document.removeEventListener(CALL_EVENT_NAME, handler);
-  }, [currentUserId, leave, onError]);
+  }, [currentUserId, leave, onError, scheduleRefresh]);
 
   const caller = incomingCall?.participants.find((p) => p.userId === incomingCall.callerId);
   const incomingName = caller?.displayName ?? (incomingCall ? getUserName(incomingCall.callerId) : '');
@@ -307,9 +419,64 @@ export function CallProvider({ currentUserId, getUserName, getUserAvatar, onErro
     ? incomingCall.participants.filter((p) => p.state === 'JOINED' || p.state === 'INVITED').length
     : 0;
 
+  // System notification while the app is in the background (if allowed in Settings).
+  useEffect(() => {
+    if (!incomingCall || typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    if (document.visibilityState === 'visible' && document.hasFocus()) return;
+    let note: Notification | null = null;
+    try {
+      note = new Notification(`Incoming ${incomingCall.callType === 'VIDEO' ? 'video' : 'voice'} call`, {
+        body: incomingPeople > 2 ? `${incomingName} and ${incomingPeople - 2} others` : incomingName,
+        tag: `call-${incomingCall.callId}`,
+        icon: incomingAvatar,
+        requireInteraction: true,
+      });
+      note.onclick = () => {
+        window.focus();
+        note?.close();
+      };
+    } catch {
+      /* Some mobile browsers only allow notifications from a service worker. */
+    }
+    return () => note?.close();
+    // Once per ringing call; later name or avatar updates must not notify again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incomingCall?.callId]);
+
+  const callPanel = activeCall && (
+    <ActiveCall
+      title={activeCall.title}
+      participants={activeCall.participants}
+      currentUserId={currentUserId}
+      video={activeCall.callType === 'VIDEO'}
+      connectedAt={connectedAt}
+      ringing={ringing}
+      state={agoraState}
+      inviteCreatesGroup={!activeCall.inGroupChat}
+      onToggleMute={() => void toggleMute()}
+      onToggleCamera={() => void toggleCamera()}
+      onToggleSpeaker={toggleSpeaker}
+      onToggleShare={() => void toggleScreenShare()}
+      onUpgradeToVideo={() => void upgradeToVideo()}
+      onInvite={inviteToCall}
+      listCameras={listCameras}
+      onSwitchCamera={(id) => void switchCamera(id)}
+      onEnd={() => void endActiveCall()}
+    />
+  );
+
   return (
     <CallContext.Provider
-      value={{ incomingCall, activeCall, startCall, acceptIncoming, rejectIncoming, endActiveCall }}
+      value={{
+        incomingCall,
+        activeCall,
+        startCall,
+        acceptIncoming,
+        rejectIncoming,
+        endActiveCall,
+        joinableCalls,
+        joinCall,
+      }}
     >
       {children}
 
@@ -322,27 +489,7 @@ export function CallProvider({ currentUserId, getUserName, getUserAvatar, onErro
         groupSize={incomingPeople}
       />
 
-      {activeCall && (
-        <ActiveCall
-          title={activeCall.title}
-          participants={activeCall.participants}
-          currentUserId={currentUserId}
-          video={activeCall.callType === 'VIDEO'}
-          connectedAt={connectedAt}
-          ringing={ringing}
-          state={agoraState}
-          inviteCreatesGroup={!activeCall.inGroupChat}
-          onToggleMute={() => void toggleMute()}
-          onToggleCamera={() => void toggleCamera()}
-          onToggleSpeaker={toggleSpeaker}
-          onToggleShare={() => void toggleScreenShare()}
-          onUpgradeToVideo={() => void upgradeToVideo()}
-          onInvite={inviteToCall}
-          listCameras={listCameras}
-          onSwitchCamera={(id) => void switchCamera(id)}
-          onEnd={() => void endActiveCall()}
-        />
-      )}
+      {callPanel && (panelHost ? createPortal(callPanel, panelHost) : callPanel)}
     </CallContext.Provider>
   );
 }

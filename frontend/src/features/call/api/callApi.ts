@@ -1,5 +1,5 @@
 import { api } from '../../../shared/api';
-import type { CallResponse, CallTokenResponse, CallHistoryPage } from '../../../shared/types';
+import type { ActiveCallsResponse, CallResponse, CallTokenResponse, CallHistoryPage } from '../../../shared/types';
 
 export const callApi = {
   /** Omit `calleeId` (null) to ring every other member of a group conversation. */
@@ -18,6 +18,14 @@ export const callApi = {
   },
   accept(callId: number): Promise<CallResponse> {
     return api.post<CallResponse>(`/api/v1/calls/${callId}/accept`);
+  },
+  /** Joins a call already in progress (e.g. a group call I missed or left). */
+  join(callId: number): Promise<CallResponse> {
+    return api.post<CallResponse>(`/api/v1/calls/${callId}/join`);
+  },
+  /** Calls still ringing for me and calls I can join, for catching up after being offline. */
+  active(): Promise<ActiveCallsResponse> {
+    return api.get<ActiveCallsResponse>('/api/v1/calls/active');
   },
   reject(callId: number): Promise<CallResponse> {
     return api.post<CallResponse>(`/api/v1/calls/${callId}/reject`);

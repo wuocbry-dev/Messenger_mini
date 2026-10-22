@@ -1111,13 +1111,24 @@
     height: 64px;
   }
 
-  /* Minimized pill: top of the pane so it never covers the composer. */
+  /* Minimized pill: bottom right of the pane, just above the tab bar. In an
+     open chat it moves to the top (the composer is at the bottom), and on
+     Settings it sits above the Save bar. */
   .active-call--mini {
-    top: calc(env(safe-area-inset-top) + 68px);
+    top: auto;
     right: var(--space-2);
-    bottom: auto;
+    bottom: var(--space-3);
     max-width: calc(100% - var(--space-4));
     padding: var(--space-1);
+  }
+
+  .app-layout:has(.chat-panel--detail) .active-call--mini {
+    top: calc(env(safe-area-inset-top) + 68px);
+    bottom: auto;
+  }
+
+  .app-layout:has(.settings-actions) .active-call--mini {
+    bottom: 84px;
   }
 
   .call-mini-main {

@@ -172,6 +172,14 @@ export interface CallEvent {
   participants: CallParticipant[];
 }
 
+/** Calls to catch up on after being offline (see GET /api/v1/calls/active). */
+export interface ActiveCallsResponse {
+  /** Still ringing for me: show the incoming-call screen. */
+  ringing: CallResponse[];
+  /** In progress in my conversations and open for me to join. */
+  joinable: CallResponse[];
+}
+
 export interface CallTokenResponse {
   callId: number;
   agoraChannelName: string;

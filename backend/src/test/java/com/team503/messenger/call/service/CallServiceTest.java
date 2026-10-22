@@ -124,6 +124,24 @@ class CallServiceTest {
             return calls.values().stream().anyMatch(c ->
                     c.getConversationId().equals(inv.getArgument(0)) && statuses.contains(c.getStatus()));
         });
+        when(callRepository.findForParticipantInState(anyLong(), any(), anyCollection())).thenAnswer(inv -> {
+            Long userId = inv.getArgument(0);
+            State state = inv.getArgument(1);
+            Collection<Call.Status> statuses = inv.getArgument(2);
+            return participants.stream()
+                    .filter(p -> p.getUserId().equals(userId) && p.getState() == state
+                            && statuses.contains(calls.get(p.getCallId()).getStatus()))
+                    .map(p -> calls.get(p.getCallId())).toList();
+        });
+        when(callRepository.findInConversationsOfUser(anyLong(), any())).thenAnswer(inv -> {
+            Long userId = inv.getArgument(0);
+            Call.Status status = inv.getArgument(1);
+            return calls.values().stream()
+                    .filter(c -> c.getStatus() == status && memberRepository
+                            .findActiveByConversationId(c.getConversationId()).stream()
+                            .anyMatch(m -> m.getUserId().equals(userId)))
+                    .toList();
+        });
         when(callRepository.findByStatusAndStartedAtBefore(any(), any())).thenAnswer(inv -> {
             Call.Status status = inv.getArgument(0);
             LocalDateTime before = inv.getArgument(1);
@@ -630,5 +648,86 @@ class CallServiceTest {
         service.rejectCall(BOB, started.id());
 
         verify(callMessages, never()).recordFinishedCall(any());
+    }
+
+    // ---------- catching up / joining later ----------
+
+    @Test
+    void someoneOfflineWhenRungStillSeesTheRingingCallWhenTheyComeBack() {
+        CallResponse started = startDirect();
+
+        assertThat(service.listActive(BOB).ringing()).extracting(CallResponse::id).containsExactly(started.id());
+        assertThat(service.listActive(ALICE).ringing()).isEmpty();
+    }
+
+    @Test
+    void ringingIsNoLongerOfferedAfterTheRingTimeout() {
+        startDirect();
+        Clock later = Clock.fixed(CLOCK.instant().plusSeconds(60), ZoneOffset.UTC);
+        CallService lateService = new CallService(callRepository, participantRepository, conversationRepository,
+                memberRepository, conversationService, userRepository,
+                new AvatarUrlResolver(mock(ObjectStorageService.class)), tokenService, props, messaging,
+                callMessages, later);
+
+        assertThat(lateService.listActive(BOB).ringing()).isEmpty();
+    }
+
+    @Test
+    void aGroupMemberWhoMissedTheCallCanJoinWhileItRuns() {
+        CallResponse started = startGroup();
+        service.acceptCall(BOB, started.id());
+        service.rejectCall(CAROL, started.id());
+
+        assertThat(service.listActive(CAROL).joinable()).extracting(CallResponse::id).containsExactly(started.id());
+        assertThat(service.listActive(BOB).joinable()).isEmpty();
+
+        service.joinCall(CAROL, started.id());
+
+        assertThat(stateOf(started.id(), CAROL)).isEqualTo(State.JOINED);
+        assertThat(eventsTo("user1")).extracting(CallEvent::type).contains("PARTICIPANT_JOINED");
+        assertThat(service.listActive(CAROL).joinable()).isEmpty();
+    }
+
+    @Test
+    void someoneWhoLeftCanJoinAgain() {
+        CallResponse started = startGroup();
+        service.acceptCall(BOB, started.id());
+        service.acceptCall(CAROL, started.id());
+        service.endCall(CAROL, started.id());
+
+        service.joinCall(CAROL, started.id());
+
+        assertThat(stateOf(started.id(), CAROL)).isEqualTo(State.JOINED);
+    }
+
+    @Test
+    void joiningWhileStillBeingRungAnswersTheCall() {
+        CallResponse started = startGroup();
+
+        CallResponse res = service.joinCall(BOB, started.id());
+
+        assertThat(res.status()).isEqualTo("ACCEPTED");
+        assertThat(stateOf(started.id(), BOB)).isEqualTo(State.JOINED);
+    }
+
+    @Test
+    void cannotJoinACallNobodyHasAnsweredYet() {
+        CallResponse started = startGroup();
+        service.rejectCall(CAROL, started.id());
+
+        assertThatThrownBy(() -> service.joinCall(CAROL, started.id()))
+                .isInstanceOf(CallException.class)
+                .extracting("code").isEqualTo("CALL_NOT_IN_PROGRESS");
+    }
+
+    @Test
+    void outsidersCannotJoin() {
+        CallResponse started = startGroup();
+        service.acceptCall(BOB, started.id());
+        when(memberRepository.existsActiveMember(GROUP_CONV, DAVE)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.joinCall(DAVE, started.id()))
+                .isInstanceOf(CallException.class)
+                .extracting("code").isEqualTo("NOT_A_MEMBER");
     }
 }

@@ -5,6 +5,8 @@ import { AppUserCard } from './AppUserCard';
 import { MobileTabBar } from './MobileTabBar';
 import { SidebarSlotContext } from './SidebarSlot';
 import { useIsMobile } from '../shared/hooks/useIsMobile';
+import { CallProvider } from '../features/call/components/CallProvider';
+import { ToastContainer, showToast, useToastStack } from '../shared/components/ui/Toast';
 import './AppLayout.css';
 
 interface AppLayoutProps {
@@ -49,18 +51,20 @@ function useVisualViewportHeight(enabled: boolean) {
 
 export function AppLayout({ user }: AppLayoutProps) {
   const [slot, setSlot] = useState<HTMLElement | null>(null);
+  const [mainEl, setMainEl] = useState<HTMLElement | null>(null);
   const isMobile = useIsMobile();
   const { pathname } = useLocation();
+  const { toasts, remove: removeToast } = useToastStack();
   useVisualViewportHeight(isMobile);
 
-  return (
+  const layout = (
     <div className="app-layout">
       <aside className="app-left-card">
         <AppSidebar />
         <div ref={setSlot} className="app-left-slot" />
         <AppUserCard user={user} />
       </aside>
-      <main className="app-main">
+      <main ref={setMainEl} className="app-main">
         {/* Phones have no left card, so the account card (and sign-out) sits on Settings. */}
         {isMobile && pathname === '/settings' && (
           <div className="app-mobile-account">
@@ -78,5 +82,26 @@ export function AppLayout({ user }: AppLayoutProps) {
           blurs whatever is below, which smeared the chat header. */}
       <div className="app-statusbar" aria-hidden="true" />
     </div>
+  );
+
+  // Calls live here, above the routes, so an incoming call rings on every page
+  // and a call in progress survives moving between Chat, Users, Calls and Settings.
+  return (
+    <>
+      {user ? (
+        <CallProvider
+          currentUserId={user.id}
+          getUserName={(id) => (id === user.id ? user.displayName : `User ${id}`)}
+          getUserAvatar={(id) => (id === user.id ? user.avatarUrl : undefined)}
+          onError={(message) => showToast('error', message)}
+          panelHost={mainEl}
+        >
+          {layout}
+        </CallProvider>
+      ) : (
+        layout
+      )}
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
+    </>
   );
 }

@@ -139,7 +139,11 @@ export function useAgora() {
         client.on('user-joined', (user) => addRemoteUid(Number(user.uid)));
         client.on('user-published', async (user, mediaType) => {
           const remoteUid = Number(user.uid);
-          await client.subscribe(user, mediaType);
+          try {
+            await client.subscribe(user, mediaType);
+          } catch {
+            return; // the connection closed meanwhile (e.g. hanging up as they publish)
+          }
           addRemoteUid(remoteUid);
           if (mediaType === 'audio' && user.audioTrack) {
             remoteAudioRef.current.set(remoteUid, user.audioTrack);

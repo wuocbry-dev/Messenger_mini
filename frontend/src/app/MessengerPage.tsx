@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ChatPanel } from '../features/chat/components/ChatPanel';
-import { CallProvider, OPEN_CONVERSATION_EVENT } from '../features/call/components/CallProvider';
+import { OPEN_CONVERSATION_EVENT } from '../features/call/components/CallProvider';
 import { PendingCallLauncher } from './PendingCallLauncher';
 import { useRealtime } from '../shared/realtime/RealtimeProvider';
 import { conversationApi } from '../features/chat/api/conversationApi';
 import { authApi } from '../features/auth/api/authApi';
 import { clearAuth } from '../features/auth/store/authStore';
 import { ApiRequestError } from '../shared/api';
-import { ToastContainer, type ToastData } from '../shared/components/ui/Toast';
+import { showToast, type ToastData } from '../shared/components/ui/Toast';
 import { useIsMobile } from '../shared/hooks/useIsMobile';
 import type {
   Conversation,
@@ -20,10 +20,6 @@ import type {
 
 /** Query param holding the open chat, so phones get Back/Forward and deep links. */
 const CONVERSATION_PARAM = 'conversation';
-
-function generateId() {
-  return Math.random().toString(36).slice(2);
-}
 
 interface UserSummary {
   id: number;
@@ -40,19 +36,11 @@ export function MessengerPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [convLoading, setConvLoading] = useState(true);
   const [activeConv, setActiveConv] = useState<Conversation | null>(null);
-  const [toasts, setToasts] = useState<ToastData[]>([]);
   const userMapRef = useRef<
     Map<number, { displayName: string; username?: string; avatarUrl?: string }>
   >(new Map());
 
-  const addToast = useCallback((type: ToastData['type'], message: string) => {
-    const id = generateId();
-    setToasts((prev) => [...prev, { id, type, message }]);
-  }, []);
-
-  const removeToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }, []);
+  const addToast = useCallback((type: ToastData['type'], message: string) => showToast(type, message), []);
 
   const normalizeConversation = useCallback((conv: Conversation): Conversation => {
     if (conv.directWithUser || conv.type !== 'DIRECT' || !user) return conv;
@@ -385,12 +373,7 @@ export function MessengerPage() {
   }
 
   return (
-    <CallProvider
-      currentUserId={user.id}
-      getUserName={getUserName}
-      getUserAvatar={getUserAvatar}
-      onError={(msg) => addToast('error', msg)}
-    >
+    <>
       <PendingCallLauncher />
       <div className="messenger-page">
         <ChatPanel
@@ -409,7 +392,6 @@ export function MessengerPage() {
           onBack={handleBack}
         />
       </div>
-      <ToastContainer toasts={toasts} onRemove={removeToast} />
-    </CallProvider>
+    </>
   );
 }

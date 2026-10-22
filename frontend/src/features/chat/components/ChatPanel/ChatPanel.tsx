@@ -52,7 +52,7 @@ export function ChatPanel({
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Map<number, string>>(new Map());
   const typingTimeout = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
-  const { startCall, activeCall } = useCall();
+  const { startCall, activeCall, joinableCalls, joinCall } = useCall();
   const slot = useContext(SidebarSlotContext);
   const { presence } = useRealtime();
   const [mediaDrawerOpen, setMediaDrawerOpen] = useState(false);
@@ -260,6 +260,13 @@ export function ChatPanel({
   const handleStartCall = useCallback(() => placeCall('VOICE'), [placeCall]);
   const handleStartVideoCall = useCallback(() => placeCall('VIDEO'), [placeCall]);
 
+  // A call running in this chat that I am not in (e.g. a group call I missed).
+  const joinable = activeConversation && !activeCall
+    ? joinableCalls.find((c) => c.conversationId === activeConversation.id)
+    : undefined;
+  const joinableCount = joinable ? joinable.participants.filter((p) => p.state === 'JOINED').length : 0;
+  const ongoingCallConversationIds = new Set(joinableCalls.map((c) => c.conversationId));
+
   const sidebarEl = (
     <Sidebar
         currentUserId={currentUserId}
@@ -269,6 +276,7 @@ export function ChatPanel({
         onlineUsers={onlineUsers}
         loading={conversationsLoading}
         onRefresh={onRefreshConversations}
+        ongoingCallConversationIds={ongoingCallConversationIds}
       />
   );
 
@@ -309,6 +317,42 @@ export function ChatPanel({
                   onBack={mobile ? onBack : undefined}
                   onMediaClick={() => setMediaDrawerOpen((o) => !o)}
                 />
+                {joinable && (
+                  <div className="chat-join-call" role="status">
+                    <span className="chat-join-call-icon" aria-hidden="true">
+                      {joinable.callType === 'VIDEO' ? (
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polygon points="23 7 16 12 23 17 23 7" />
+                          <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+                        </svg>
+                      ) : (
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.38 2 2 0 0 1 3.6 1.22h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                        </svg>
+                      )}
+                    </span>
+                    <span className="chat-join-call-text">
+                      <span className="chat-join-call-title">
+                        {joinable.callType === 'VIDEO' ? 'Video call' : 'Voice call'} in progress
+                      </span>
+                      <span className="chat-join-call-sub">
+                        {joinableCount} {joinableCount === 1 ? 'person' : 'people'} in the call
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      className="chat-join-call-btn"
+                      onClick={() =>
+                        void joinCall(joinable.id, {
+                          group: isGroup,
+                          title: isGroup ? conversationTitle : undefined,
+                        })
+                      }
+                    >
+                      Join
+                    </button>
+                  </div>
+                )}
                 <MessageList
                   messages={messages}
                   currentUserId={currentUserId}
