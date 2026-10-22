@@ -25,14 +25,23 @@ function useVisualViewportHeight(enabled: boolean) {
     }
     const update = () => {
       root.style.setProperty('--app-height', `${Math.round(vv.height)}px`);
-      // The browser may scroll the page to reveal a focused input; the app
-      // scrolls its own panes, so pin the page back to the top.
+      // The browser may scroll the page, or the shell's overflow-hidden boxes,
+      // to reveal a focused input. Only the inner panes are meant to scroll,
+      // so pin the shell back in place; otherwise the chat header slides away.
+      // Leave pinch-zoom panning alone.
+      if (vv.scale > 1.01) return;
       if (window.scrollY !== 0) window.scrollTo(0, 0);
+      document.querySelectorAll<HTMLElement>('#root, .app-layout, .app-main, .chat-panel, .chat-main, .chat-column')
+        .forEach((el) => {
+          if (el.scrollTop !== 0) el.scrollTop = 0;
+        });
     };
     update();
     vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
     return () => {
       vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
       root.style.removeProperty('--app-height');
     };
   }, [enabled]);
@@ -64,6 +73,10 @@ export function AppLayout({ user }: AppLayoutProps) {
         </SidebarSlotContext.Provider>
       </main>
       <MobileTabBar />
+      {/* Phones: a solid strip behind the status bar. iOS Safari tints the
+          status-bar area from a fixed element at the top edge; without one it
+          blurs whatever is below, which smeared the chat header. */}
+      <div className="app-statusbar" aria-hidden="true" />
     </div>
   );
 }

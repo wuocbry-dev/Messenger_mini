@@ -53,6 +53,11 @@
   overflow: hidden;
 }
 
+/* Status-bar strip: phone layout only (see AppLayout). */
+.app-statusbar {
+  display: none;
+}
+
 /* Phones: one full-screen pane plus the bottom tab bar (MobileTabBar). */
 @media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
   .app-layout {
@@ -82,6 +87,18 @@
   .app-layout:has(.app-main input:focus) .mobile-tabbar,
   .app-layout:has(.app-main textarea:focus) .mobile-tabbar {
     display: none;
+  }
+
+  .app-statusbar {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: env(safe-area-inset-top);
+    z-index: 300; /* above the app, below dialogs, video calls and toasts */
+    background: var(--color-surface);
+    pointer-events: none;
   }
 
   .app-mobile-account {

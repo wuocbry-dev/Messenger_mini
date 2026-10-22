@@ -128,7 +128,9 @@ export function MessageList({
   onCallBack,
   callDisabled,
 }: MessageListProps) {
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  // Jump (not animate) to the bottom the first time a chat's messages render.
+  const jumpNext = useRef(true);
   const [fileUrls, setFileUrls] = useState<Record<number, string>>({});
   const [lightbox, setLightbox] = useState<{ images: LightboxImage[]; index: number } | null>(null);
   const groups = useMemo(() => groupMessages(messages), [messages]);
@@ -175,8 +177,25 @@ export function MessageList({
   }, [messages, fileUrls]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (loading) jumpNext.current = true;
+  }, [loading]);
+
+  // Scroll only the message list itself. scrollIntoView would also scroll every
+  // ancestor (even overflow: hidden ones), which on phones pushed the chat
+  // header off the top of the screen.
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: jumpNext.current ? 'auto' : 'smooth' });
+    if (messages.length > 0) jumpNext.current = false;
   }, [messages, typingUser]);
+
+  // Photos load after the first scroll and make the list taller; stay at the
+  // bottom if the reader was already there.
+  const stickToBottom = () => {
+    const el = listRef.current;
+    if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 400) el.scrollTop = el.scrollHeight;
+  };
 
   if (loading) {
     return (
@@ -206,7 +225,14 @@ export function MessageList({
   }
 
   return (
-    <div className="message-list" role="log" aria-live="polite" aria-label="Messages">
+    <div
+      ref={listRef}
+      className="message-list"
+      role="log"
+      aria-live="polite"
+      aria-label="Messages"
+      onLoadCapture={stickToBottom}
+    >
       {groups.map((group, i) => {
         const first = group.messages[0];
         const msg = group.messages[group.messages.length - 1]; // time/receipt of the latest
@@ -391,7 +417,6 @@ export function MessageList({
         </div>
       )}
 
-      <div ref={bottomRef} />
 
       {lightbox && (
         <ImageLightbox
