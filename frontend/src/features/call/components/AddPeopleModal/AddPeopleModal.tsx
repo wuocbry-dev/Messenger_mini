@@ -52,11 +52,11 @@ export function AddPeopleModal({ open, onClose, excludeIds, room, onInvite, crea
 
         <PeoplePicker selected={selected} onChange={setSelected} excludeIds={excludeIds} max={room} />
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)' }}>
           <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>
             {room <= 0 ? 'The call is full' : `Up to ${room} more ${room === 1 ? 'person' : 'people'}`}
           </span>
-          <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+          <div style={{ display: 'flex', gap: 'var(--space-2)', marginLeft: 'auto' }}>
             <Button variant="ghost" onClick={onClose}>Cancel</Button>
             <Button variant="primary" onClick={() => void submit()} loading={busy} disabled={selected.length === 0}>
               Add to call

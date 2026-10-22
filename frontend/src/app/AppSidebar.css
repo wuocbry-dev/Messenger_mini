@@ -77,3 +77,14 @@
     display: none;
   }
 }
+
+/* Tablets and small laptops: the left card is at its 320px minimum, too narrow
+   for four icon+label tabs in a row, so stack each icon above its label. */
+@media (min-width: 421px) and (max-width: 1319px) {
+  .sidebar-nav-item {
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--space-1) 2px;
+    font-size: var(--font-size-xs);
+  }
+}

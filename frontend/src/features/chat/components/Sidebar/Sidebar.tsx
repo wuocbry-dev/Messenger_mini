@@ -14,8 +14,6 @@ interface SidebarProps {
   onlineUsers: Set<number>;
   loading: boolean;
   onRefresh: () => void;
-  open?: boolean;
-  onClose?: () => void;
 }
 
 export function Sidebar({
@@ -26,11 +24,10 @@ export function Sidebar({
   onlineUsers,
   loading,
   onRefresh,
-  open,
-  onClose,
 }: SidebarProps) {
   const [showNewConv, setShowNewConv] = useState(false);
   const [showNewGroup, setShowNewGroup] = useState(false);
+  const [query, setQuery] = useState('');
 
   const getConversationName = (conv: Conversation): string => getConversationTitle(conv, currentUserId);
 
@@ -39,18 +36,33 @@ export function Sidebar({
     return null;
   };
 
+  const needle = query.trim().toLowerCase();
+  const visible = needle
+    ? conversations.filter((conv) => {
+        const other = getOtherUser(conv);
+        return [getConversationName(conv), other?.username, conv.lastMessage?.content]
+          .some((text) => text?.toLowerCase().includes(needle));
+      })
+    : conversations;
+
   return (
-    <aside className={`sidebar${open ? ' sidebar--open' : ''}`} aria-label="Conversations">
-      {open && (
-        <div className="sidebar-overlay" onClick={onClose} aria-hidden="true" />
-      )}
+    <aside className="sidebar" aria-label="Conversations">
+      {/* Phone layout only: the desktop left card already carries the app title. */}
+      <h2 className="sidebar-mobile-title">Chats</h2>
       <div className="sidebar-search">
         <div className="search-input-wrap">
           <svg className="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8" />
             <path d="M21 21l-4.35-4.35" />
           </svg>
-          <input className="search-input" type="search" placeholder="Search conversations..." aria-label="Search conversations" />
+          <input
+            className="search-input"
+            type="search"
+            placeholder="Search conversations..."
+            aria-label="Search conversations"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
         </div>
         <IconButton
           label="New conversation"
@@ -98,8 +110,10 @@ export function Sidebar({
               </button>
             }
           />
+        ) : visible.length === 0 ? (
+          <EmptyState title="No matches" description={`No conversations match "${query.trim()}"`} />
         ) : (
-          conversations.map((conv) => {
+          visible.map((conv) => {
             const otherUser = getOtherUser(conv);
             const isActive = conv.id === activeConversationId;
             const isOnline = otherUser ? onlineUsers.has(otherUser.id) : false;

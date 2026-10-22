@@ -136,3 +136,14 @@
   border-color: var(--color-primary);
   background: var(--color-primary);
 }
+
+/* Phones: the list shrinks so search and actions stay visible above the keyboard. */
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  .people-picker-search {
+    height: 44px;
+  }
+
+  .people-picker-list {
+    max-height: min(280px, 34dvh);
+  }
+}

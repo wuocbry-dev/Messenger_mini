@@ -86,37 +86,80 @@
   margin: 0 var(--space-1);
 }
 
-/* Conversation-list toggle: only needed when the list is a drawer */
-.chat-header-menu-btn {
-  display: none;
+/* Back to the conversation list: phone layout only */
+.chat-header-back-btn {
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  margin-left: calc(-1 * var(--space-2));
+  padding: 0;
   background: transparent;
   border: none;
-  border-radius: var(--radius-xl);
-  color: var(--color-text-secondary);
+  border-radius: var(--radius-full);
+  color: var(--color-primary);
   cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
+  transition: background var(--transition-fast);
 }
 
-.chat-header-menu-btn:hover {
-  background: var(--color-bg);
-  color: var(--color-text-primary);
+.chat-header-back-btn:hover,
+.chat-header-back-btn:active {
+  background: var(--color-primary-alpha);
 }
 
-@media (max-width: 768px) {
+/* Phones: [Back] [Avatar] [Name / status] [Voice] [Video] [More] on one compact row */
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
   .chat-header {
-    padding: var(--space-3) var(--space-4);
-    min-height: 72px;
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+    min-height: 60px;
   }
 
-  .chat-header-menu-btn {
-    display: flex;
+  .chat-header-info {
+    flex: 1;
+    gap: var(--space-2);
+  }
+
+  .chat-header-info .avatar-lg {
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+  }
+
+  .chat-header-info .avatar-lg .avatar-initials {
+    font-size: 1rem;
   }
 
   .chat-header-name {
-    font-size: var(--font-size-lg);
+    font-size: var(--font-size-base);
+  }
+
+  .chat-header-status {
+    font-size: var(--font-size-xs);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+  }
+
+  .chat-header-actions {
+    gap: 0;
+  }
+
+  .chat-header-actions .icon-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .chat-header-actions .icon-btn svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .chat-header-divider {
+    display: none;
   }
 }

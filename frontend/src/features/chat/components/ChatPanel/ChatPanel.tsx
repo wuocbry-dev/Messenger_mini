@@ -27,6 +27,10 @@ interface ChatPanelProps {
   getUserName: (userId: number) => string;
   getUserAvatar: (userId: number) => string | undefined;
   onError?: (message: string) => void;
+  /** Phone layout: show either the conversation list or one full-screen chat. */
+  mobile?: boolean;
+  /** Phone layout: leave the open chat and return to the list. */
+  onBack?: () => void;
 }
 
 export function ChatPanel({
@@ -41,11 +45,12 @@ export function ChatPanel({
   getUserName,
   getUserAvatar,
   onError,
+  mobile = false,
+  onBack,
 }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Map<number, string>>(new Map());
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const typingTimeout = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   const { startCall, activeCall } = useCall();
   const slot = useContext(SidebarSlotContext);
@@ -76,10 +81,10 @@ export function ChatPanel({
     };
   }, [activeConversation?.id]);
 
-  // Auto-close sidebar on mobile when a conversation is selected
+  // On phones Shared is a full-screen page; leaving or switching the chat closes it.
   useEffect(() => {
-    if (activeConversation) setSidebarOpen(false);
-  }, [activeConversation?.id]);
+    if (mobile) setMediaDrawerOpen(false);
+  }, [activeConversation?.id, mobile]);
 
   // Handle incoming messages from STOMP
   const handleIncomingMessage = useCallback(
@@ -264,65 +269,75 @@ export function ChatPanel({
         onlineUsers={onlineUsers}
         loading={conversationsLoading}
         onRefresh={onRefreshConversations}
-        open={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
       />
   );
 
-  return (
-    <div className={`chat-panel ${activeConversation ? 'chat-panel--has-active' : ''}`}>
-      {slot ? createPortal(sidebarEl, slot) : sidebarEl}
+  // Desktop portals the list into the left card. Phones have no left card, so
+  // the list is mounted here and shown instead of the chat until one is opened.
+  const showList = !mobile || !activeConversation;
+  const showChat = !mobile || !!activeConversation;
+  const panelClass = [
+    'chat-panel',
+    activeConversation ? 'chat-panel--has-active' : '',
+    mobile ? (activeConversation ? 'chat-panel--mobile chat-panel--detail' : 'chat-panel--mobile chat-panel--list') : '',
+  ].filter(Boolean).join(' ');
 
-      <main className="chat-main">
-        {activeConversation ? (
-          <>
-            <div className="chat-column">
-              <ChatHeader
+  return (
+    <div className={panelClass}>
+      {showList && (slot ? createPortal(sidebarEl, slot) : sidebarEl)}
+
+      {showChat && (
+        <main className="chat-main">
+          {activeConversation ? (
+            <>
+              <div className="chat-column">
+                <ChatHeader
+                  conversation={activeConversation}
+                  currentUserId={currentUserId}
+                  online={otherUserId ? onlineUsers.has(otherUserId) : false}
+                  lastSeenAt={otherUserId ? presence.get(otherUserId)?.lastSeenAt : undefined}
+                  typing={!!typingUser}
+                  otherUserName={otherUserName}
+                  otherUserAvatar={otherUserAvatar}
+                  otherUserId={otherUserId}
+                  isGroup={isGroup}
+                  memberCount={activeConversation ? memberCount(activeConversation) : 0}
+                  displayTitle={conversationTitle}
+                  onCallClick={handleStartCall}
+                  onVideoCallClick={handleStartVideoCall}
+                  callInProgress={!!activeCall}
+                  onBack={mobile ? onBack : undefined}
+                  onMediaClick={() => setMediaDrawerOpen((o) => !o)}
+                />
+                <MessageList
+                  messages={messages}
+                  currentUserId={currentUserId}
+                  typingUser={typingUser}
+                  typingUserAvatar={isGroup ? undefined : otherUserAvatar}
+                  typingPlural={typingNames.length > 1}
+                  loading={messagesLoading}
+                  getUserAvatar={getUserAvatar}
+                />
+                <MessageInput
+                  conversationId={activeConversation.id}
+                  onSend={handleSend}
+                  onTyping={handleTypingSignal}
+                  onAttach={handleAttach}
+                />
+              </div>
+              <SharedMediaDrawer
                 conversation={activeConversation}
-                currentUserId={currentUserId}
-                online={otherUserId ? onlineUsers.has(otherUserId) : false}
-                lastSeenAt={otherUserId ? presence.get(otherUserId)?.lastSeenAt : undefined}
-                typing={!!typingUser}
-                otherUserName={otherUserName}
-                otherUserAvatar={otherUserAvatar}
-                otherUserId={otherUserId}
-                isGroup={isGroup}
-                memberCount={activeConversation ? memberCount(activeConversation) : 0}
-                displayTitle={conversationTitle}
-                onCallClick={handleStartCall}
-                onVideoCallClick={handleStartVideoCall}
-                callInProgress={!!activeCall}
-                onMenuClick={() => setSidebarOpen(true)}
-                onMediaClick={() => setMediaDrawerOpen((o) => !o)}
+                open={mediaDrawerOpen}
+                onClose={() => setMediaDrawerOpen(false)}
               />
-              <MessageList
-                messages={messages}
-                currentUserId={currentUserId}
-                typingUser={typingUser}
-                typingUserAvatar={isGroup ? undefined : otherUserAvatar}
-                typingPlural={typingNames.length > 1}
-                loading={messagesLoading}
-                getUserAvatar={getUserAvatar}
-              />
-              <MessageInput
-                conversationId={activeConversation.id}
-                onSend={handleSend}
-                onTyping={handleTypingSignal}
-                onAttach={handleAttach}
-              />
+            </>
+          ) : (
+            <div className="chat-empty">
+              <WelcomeShowcase onStartChat={() => setShowNewConv(true)} />
             </div>
-            <SharedMediaDrawer
-              conversation={activeConversation}
-              open={mediaDrawerOpen}
-              onClose={() => setMediaDrawerOpen(false)}
-            />
-          </>
-        ) : (
-          <div className="chat-empty">
-            <WelcomeShowcase onStartChat={() => setShowNewConv(true)} />
-          </div>
-        )}
-      </main>
+          )}
+        </main>
+      )}
 
       <NewConversationModal
         open={showNewConv}

@@ -9,6 +9,7 @@ import { authApi } from '../features/auth/api/authApi';
 import { clearAuth } from '../features/auth/store/authStore';
 import { ApiRequestError } from '../shared/api';
 import { ToastContainer, type ToastData } from '../shared/components/ui/Toast';
+import { useIsMobile } from '../shared/hooks/useIsMobile';
 import type {
   Conversation,
   Message,
@@ -16,6 +17,9 @@ import type {
   MessageReceipt,
   CallEvent,
 } from '../shared/types';
+
+/** Query param holding the open chat, so phones get Back/Forward and deep links. */
+const CONVERSATION_PARAM = 'conversation';
 
 function generateId() {
   return Math.random().toString(36).slice(2);
@@ -31,6 +35,7 @@ interface UserSummary {
 export function MessengerPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const isMobile = useIsMobile();
   const [user, setUser] = useState<UserSummary | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [convLoading, setConvLoading] = useState(true);
@@ -261,7 +266,7 @@ export function MessengerPage() {
     return () => unbinds.forEach((off) => off());
   }, [handleMessage, handleTypingEvent, handleReceipt, handleCallEvent]);
 
-  const handleSelectConversation = useCallback((conv: Conversation) => {
+  const showConversation = useCallback((conv: Conversation) => {
     const normalized = normalizeConversation(conv);
     if (normalized.directWithUser) {
       userMapRef.current.set(normalized.directWithUser.id, {
@@ -272,6 +277,55 @@ export function MessengerPage() {
     }
     setActiveConv(normalized);
   }, [normalizeConversation]);
+
+  // The open chat is mirrored in `/?conversation=<id>`. Phones push a history
+  // entry (the list is the screen "behind" the chat, so Back returns to it);
+  // desktop replaces the entry so its history behaves as before.
+  const handleSelectConversation = useCallback((conv: Conversation, opts?: { replace?: boolean }) => {
+    showConversation(conv);
+    const current = new URLSearchParams(window.location.search).get(CONVERSATION_PARAM);
+    // A replace still runs when the URL already matches: it clears one-shot router state.
+    if (current === String(conv.id) && !opts?.replace) return;
+    const to = { pathname: '/', search: `?${CONVERSATION_PARAM}=${conv.id}` };
+    if (isMobile && !opts?.replace) {
+      navigate(to, { state: { fromChatList: true } });
+    } else {
+      navigate(to, { replace: true });
+    }
+  }, [showConversation, isMobile, navigate]);
+
+  // URL -> selection: deep links, browser Back/Forward and resizes.
+  const paramValue = new URLSearchParams(location.search).get(CONVERSATION_PARAM);
+  const paramId = paramValue ? Number(paramValue) : null;
+  const prevParamId = useRef(paramId);
+  useEffect(() => {
+    const hadParam = prevParamId.current != null;
+    prevParamId.current = paramId;
+    if (paramId == null) {
+      // Back from a chat on a phone returns to the list. Desktop keeps the
+      // open chat, as it always has, when the URL loses the param.
+      if (isMobile && hadParam) setActiveConv(null);
+      return;
+    }
+    if (activeConv?.id === paramId) return;
+    const conv = conversations.find((c) => c.id === paramId);
+    if (conv) {
+      showConversation(conv);
+    } else if (!convLoading && loadedOnce.current) {
+      // Unknown or inaccessible conversation: fall back to the plain list.
+      navigate('/', { replace: true });
+    }
+  }, [paramId, activeConv?.id, conversations, convLoading, isMobile, showConversation, navigate]);
+
+  const handleBack = useCallback(() => {
+    if ((location.state as { fromChatList?: boolean } | null)?.fromChatList) {
+      navigate(-1); // pops back to the list entry; the effect above clears the chat
+    } else {
+      // Entered directly (deep link, Users page, call): there is no list entry behind.
+      setActiveConv(null);
+      navigate('/', { replace: true });
+    }
+  }, [location.state, navigate]);
 
   // Open a conversation asked for by the call UI (e.g. the group chat created
   // when someone is added to a call). It is selected once it is in the list.
@@ -303,10 +357,10 @@ export function MessengerPage() {
     if (!id || convLoading) return;
     const conv = conversations.find((c) => c.id === id);
     if (conv) {
-      handleSelectConversation(conv);
-      navigate(location.pathname, { replace: true, state: null });
+      // Replaces the entry, which also drops the one-shot router state.
+      handleSelectConversation(conv, { replace: true });
     }
-  }, [location, convLoading, conversations, handleSelectConversation, navigate]);
+  }, [location, convLoading, conversations, handleSelectConversation]);
 
   const getUserName = useCallback((userId: number): string => {
     return userMapRef.current.get(userId)?.displayName ?? `User ${userId}`;
@@ -351,6 +405,8 @@ export function MessengerPage() {
           getUserName={getUserName}
           getUserAvatar={getUserAvatar}
           onError={(message) => addToast('error', message)}
+          mobile={isMobile}
+          onBack={handleBack}
         />
       </div>
       <ToastContainer toasts={toasts} onRemove={removeToast} />

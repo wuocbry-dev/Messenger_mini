@@ -113,3 +113,10 @@
 .input-password-toggle:hover {
   color: var(--color-text-secondary);
 }
+
+/* Phones: 16px text stops iOS from zooming the page when a field gains focus. */
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  .input-field {
+    font-size: var(--font-size-base);
+  }
+}

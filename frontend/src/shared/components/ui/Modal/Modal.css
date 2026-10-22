@@ -71,3 +71,41 @@
   from { opacity: 0; }
   to   { opacity: 1; }
 }
+
+/* Phones: dialogs sit clear of the notch and home indicator, and fit the visible
+   viewport so their actions stay reachable above the on-screen keyboard. */
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  .modal-overlay {
+    bottom: auto;
+    height: var(--app-height, 100dvh);
+    padding:
+      calc(var(--space-3) + env(safe-area-inset-top))
+      var(--space-3)
+      calc(var(--space-3) + env(safe-area-inset-bottom));
+  }
+
+  .modal-panel {
+    max-height: calc(var(--app-height, 100dvh) - var(--space-6) - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    border-radius: var(--radius-2xl);
+    overscroll-behavior: contain;
+  }
+
+  .modal-header {
+    padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  }
+
+  .modal-close {
+    width: 44px;
+    height: 44px;
+  }
+
+  .modal-body {
+    padding: var(--space-4);
+  }
+
+  .modal-overlay input,
+  .modal-overlay textarea,
+  .modal-overlay select {
+    font-size: max(16px, 1em); /* stops iOS from zooming on focus */
+  }
+}

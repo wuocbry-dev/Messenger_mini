@@ -143,3 +143,85 @@
   font-size: var(--font-size-xs);
   color: var(--color-text-muted);
 }
+
+/* Phones: one column of cards; the account card with sign-out sits above
+   (AppLayout), and Save/Cancel stay in reach at the bottom while editing. */
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  .settings-page {
+    overscroll-behavior: contain;
+  }
+
+  .settings-content {
+    padding: var(--space-4) var(--space-3) var(--space-4);
+  }
+
+  .settings-header {
+    margin-bottom: var(--space-4);
+    padding: 0 var(--space-1);
+  }
+
+  .settings-subtitle {
+    display: none;
+  }
+
+  .settings-form {
+    gap: var(--space-4);
+  }
+
+  .settings-section {
+    padding: var(--space-4);
+    border-radius: var(--radius-2xl);
+  }
+
+  .settings-section-title {
+    margin-bottom: var(--space-4);
+  }
+
+  .settings-profile-header {
+    flex-direction: column;
+    text-align: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+    padding-bottom: var(--space-4);
+  }
+
+  .settings-profile-header .avatar-xl {
+    width: 96px;
+    height: 96px;
+  }
+
+  .settings-profile-info {
+    align-items: center;
+    max-width: 100%;
+  }
+
+  .settings-profile-name,
+  .settings-profile-username {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .settings-avatar-actions {
+    justify-content: center;
+  }
+
+  .settings-avatar-actions .btn {
+    min-height: 40px;
+  }
+
+  .settings-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    margin: 0 calc(-1 * var(--space-3));
+    padding: var(--space-3);
+    background: var(--color-bg);
+    border-top: 1px solid var(--color-border-light);
+  }
+
+  .settings-actions .btn {
+    flex: 1;
+    min-width: 0;
+    min-height: 48px;
+  }
+}

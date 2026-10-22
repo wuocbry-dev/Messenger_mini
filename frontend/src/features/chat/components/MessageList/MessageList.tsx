@@ -3,6 +3,7 @@ import type { Message, MessageAttachment, MessageReceipt } from '../../../../sha
 import { Avatar, EmptyState, Skeleton } from '../../../../shared/components/ui';
 import { messageApi } from '../../api';
 import { ImageLightbox, type LightboxImage } from '../ImageLightbox';
+import { openResolvedUrl } from '../../../../shared/utils/openResolvedUrl';
 import './MessageList.css';
 
 interface MessageListProps {
@@ -111,10 +112,8 @@ export function MessageList({ messages, currentUserId, typingUser, typingUserAva
   const [lightbox, setLightbox] = useState<{ images: LightboxImage[]; index: number } | null>(null);
   const groups = useMemo(() => groupMessages(messages), [messages]);
 
-  const openAttachment = async (fileId: number) => {
-    const file = await messageApi.getFile(fileId);
-    window.open(file.downloadUrl, '_blank', 'noopener,noreferrer');
-  };
+  const openAttachment = (fileId: number) =>
+    openResolvedUrl(async () => (await messageApi.getFile(fileId)).downloadUrl);
 
   useEffect(() => {
     const imageFileIds = messages

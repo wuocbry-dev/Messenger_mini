@@ -53,27 +53,51 @@
   overflow: hidden;
 }
 
-@media (max-width: 768px) {
+/* Phones: one full-screen pane plus the bottom tab bar (MobileTabBar). */
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
   .app-layout {
     flex-direction: column;
+    height: var(--app-height, 100dvh);
     padding: 0;
     gap: 0;
+    background: var(--color-surface);
   }
 
+  /* Navigation moves to the tab bar and the list into the content pane. */
   .app-left-card {
-    width: 100%;
-    border-radius: 0;
-    border: none;
-    box-shadow: var(--shadow-sm);
-  }
-
-  .app-left-slot {
-    flex: 0;
+    display: none;
   }
 
   .app-main {
+    flex: 1;
     border-radius: 0;
     border: none;
     box-shadow: none;
+    padding-top: env(safe-area-inset-top);
+  }
+
+  /* Immersive screens (open chat, any active call) and the on-screen keyboard hide the tabs. */
+  .app-layout:has(.chat-panel--detail) .mobile-tabbar,
+  .app-layout:has(.active-call) .mobile-tabbar,
+  .app-layout:has(.app-main input:focus) .mobile-tabbar,
+  .app-layout:has(.app-main textarea:focus) .mobile-tabbar {
+    display: none;
+  }
+
+  .app-mobile-account {
+    flex-shrink: 0;
+    position: relative;
+    z-index: 2;
+    background: var(--color-bg);
+  }
+
+  /* At the top of the page the account menu opens downward. */
+  .app-mobile-account .user-card-footer {
+    margin: var(--space-3) var(--space-3) 0;
+  }
+
+  .app-mobile-account .user-card-footer-menu {
+    top: calc(100% + 8px);
+    bottom: auto;
   }
 }

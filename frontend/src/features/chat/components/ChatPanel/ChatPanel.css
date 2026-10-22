@@ -34,3 +34,14 @@
   flex-direction: column;
   overflow: hidden;
 }
+
+/* Phones: either the list or one full-screen chat (see ChatPanel `mobile`). */
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  .chat-panel--mobile .sidebar {
+    min-width: 0;
+  }
+
+  .chat-panel--mobile .chat-main {
+    min-height: 0;
+  }
+}

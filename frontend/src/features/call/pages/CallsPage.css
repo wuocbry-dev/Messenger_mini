@@ -559,3 +559,168 @@
     row-gap: var(--space-1);
   }
 }
+
+/* One-tap call back: phone layout only. */
+.call-row-callback {
+  display: none;
+}
+
+/* Phones: compact rows (name + kind | when + duration), a call-back button,
+   and details as a full-screen page. */
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  .calls-header {
+    gap: var(--space-3);
+    padding: var(--space-4) var(--space-4) var(--space-2);
+  }
+
+  .calls-page-title {
+    font-size: var(--font-size-2xl);
+  }
+
+  .calls-search-input {
+    height: 44px;
+    font-size: var(--font-size-base); /* 16px stops iOS from zooming on focus */
+  }
+
+  .calls-filters {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .calls-filters::-webkit-scrollbar {
+    display: none;
+  }
+
+  .calls-chip {
+    flex-shrink: 0;
+    min-height: 36px;
+  }
+
+  .calls-list {
+    padding: var(--space-1) var(--space-2) var(--space-3);
+    overscroll-behavior: contain;
+  }
+
+  .call-row {
+    gap: 0;
+  }
+
+  .call-row-main {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'avatar who when'
+      'avatar who duration';
+    column-gap: var(--space-3);
+    row-gap: 2px;
+    padding: var(--space-2);
+  }
+
+  .call-row-main .avatar-lg {
+    width: 48px;
+    height: 48px;
+  }
+
+  .call-row-who {
+    min-width: 0;
+  }
+
+  .call-row-kind {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* The kind line already says missed / rejected / cancelled. */
+  .call-row-main > .call-pill {
+    display: none;
+  }
+
+  .call-row-when {
+    flex-direction: row;
+    gap: 4px;
+    justify-content: flex-end;
+    font-size: var(--font-size-xs);
+    white-space: nowrap;
+  }
+
+  .call-row-duration {
+    justify-self: end;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+  }
+
+  .call-row-callback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border: none;
+    border-radius: var(--radius-full);
+    background: transparent;
+    color: var(--color-primary);
+    cursor: pointer;
+  }
+
+  .call-row-callback:active {
+    background: var(--color-primary-alpha);
+  }
+
+  .call-row-more {
+    width: 36px;
+    height: 44px;
+  }
+
+  .call-row-menu button {
+    min-height: 44px;
+  }
+
+  .calls-detail {
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    width: 100%;
+    height: var(--app-height, 100dvh);
+    padding:
+      calc(var(--space-6) + env(safe-area-inset-top))
+      var(--space-4)
+      calc(var(--space-6) + env(safe-area-inset-bottom));
+    border-left: none;
+    box-shadow: none;
+    animation: fadeIn var(--transition-fast) ease-out;
+  }
+
+  .calls-detail-close {
+    top: calc(var(--space-3) + env(safe-area-inset-top));
+    width: 44px;
+    height: 44px;
+  }
+
+  .calls-act {
+    min-width: 0;
+  }
+}
+
+/* Narrow phones: the row opens the details page, which has every action in the
+   menu, so drop the menu button and give the name the room. */
+@media (max-width: 374px) {
+  .call-row-menu-wrap {
+    display: none;
+  }
+
+  .call-row-main {
+    column-gap: var(--space-2);
+  }
+
+  .call-row-main .avatar-lg {
+    width: 40px;
+    height: 40px;
+  }
+
+  .call-row-main .avatar-lg .avatar-initials {
+    font-size: 1rem;
+  }
+}

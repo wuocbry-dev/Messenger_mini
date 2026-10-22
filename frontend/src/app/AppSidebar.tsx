@@ -2,7 +2,8 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import './AppSidebar.css';
 
-const navItems = [
+/** Main routes, shared by the desktop toolbar and the mobile tab bar. */
+export const navItems = [
   {
     to: '/',
     label: 'Chat',

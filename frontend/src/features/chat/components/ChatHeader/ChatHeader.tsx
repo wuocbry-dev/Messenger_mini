@@ -18,7 +18,8 @@ interface ChatHeaderProps {
   otherUserAvatar?: string;
   otherUserId?: number;
   callInProgress?: boolean;
-  onMenuClick?: () => void;
+  /** Phone layout: returns to the conversation list. */
+  onBack?: () => void;
   onMediaClick?: () => void;
   /** Group conversation: shows the member count and call buttons for the whole group. */
   isGroup?: boolean;
@@ -39,7 +40,7 @@ export function ChatHeader({
   otherUserAvatar,
   otherUserId,
   callInProgress,
-  onMenuClick,
+  onBack,
   onMediaClick,
   isGroup = false,
   memberCount = 0,
@@ -53,8 +54,15 @@ export function ChatHeader({
     ?? 'Chat';
 
   return (
-    <header className="chat-header">
+    <header className={`chat-header${onBack ? ' chat-header--mobile' : ''}`}>
       <div className="chat-header-info">
+        {onBack && (
+          <button type="button" className="chat-header-back-btn" onClick={onBack} aria-label="Back to chats">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+        )}
         <Avatar
           name={name}
           src={otherUserAvatar ?? conversation.avatarUrl}
@@ -121,17 +129,6 @@ export function ChatHeader({
             </IconButton>
           </>
         )}
-        <button
-          className="chat-header-menu-btn"
-          onClick={onMenuClick}
-          aria-label="Open conversations"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="3" y1="6" x2="21" y2="6" />
-            <line x1="3" y1="12" x2="21" y2="12" />
-            <line x1="3" y1="18" x2="21" y2="18" />
-          </svg>
-        </button>
       </div>
     </header>
   );

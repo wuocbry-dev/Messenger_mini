@@ -221,3 +221,94 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Password visibility toggle and compact logo: phone layout only. */
+.auth-password {
+  position: relative;
+}
+
+.auth-password-toggle,
+.auth-mobile-logo {
+  display: none;
+}
+
+/* Phones: one scrollable column that stays usable with the keyboard open. */
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  .auth-page {
+    flex: 1;
+    min-height: 0;
+    height: var(--app-height, 100dvh);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .auth-panel-right {
+    min-height: 100%;
+    justify-content: flex-start;
+    padding:
+      calc(var(--space-8) + env(safe-area-inset-top))
+      var(--space-5)
+      calc(var(--space-6) + env(safe-area-inset-bottom));
+    overflow: visible;
+  }
+
+  .auth-card {
+    max-width: 420px;
+    margin: auto 0;
+  }
+
+  .auth-mobile-logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-6);
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text-primary);
+    letter-spacing: -0.01em;
+  }
+
+  .auth-brand {
+    margin-bottom: var(--space-6);
+  }
+
+  .auth-form .input-field {
+    height: 48px;
+    font-size: var(--font-size-base); /* 16px stops iOS from zooming on focus */
+  }
+
+  .auth-password .input-field {
+    padding-right: 52px;
+  }
+
+  .auth-password-toggle {
+    position: absolute;
+    right: 2px;
+    bottom: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border: none;
+    border-radius: var(--radius-lg);
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+  }
+
+  .auth-password-toggle:hover,
+  .auth-password-toggle[aria-pressed='true'] {
+    color: var(--color-primary);
+  }
+
+  .auth-submit {
+    height: 52px;
+  }
+
+  .auth-toggle-btn {
+    min-height: 44px;
+    padding: 0 var(--space-1);
+  }
+}

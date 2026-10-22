@@ -8,30 +8,6 @@
   background: transparent;
 }
 
-/* Mobile: the list becomes a full-screen drawer */
-@media (max-width: 768px) {
-  .sidebar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 400;
-    background: var(--color-surface);
-    transform: translateX(-100%);
-    transition: transform var(--transition-base);
-    box-shadow: var(--shadow-xl);
-  }
-
-  .sidebar--open {
-    transform: translateX(0);
-  }
-
-  .sidebar-overlay {
-    display: block;
-  }
-}
-
 .sidebar-search {
   display: flex;
   align-items: center;
@@ -151,10 +127,58 @@
   padding: 0;
 }
 
-.sidebar-overlay {
+.sidebar-mobile-title {
   display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  z-index: -1;
+}
+
+/* Phones: the list is the full-width home screen of the Chat tab. */
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  .sidebar {
+    background: var(--color-surface);
+  }
+
+  .sidebar-mobile-title {
+    display: block;
+    flex-shrink: 0;
+    margin: 0;
+    padding: var(--space-4) var(--space-4) var(--space-2);
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-bold);
+    letter-spacing: -0.02em;
+    color: var(--color-text-primary);
+  }
+
+  .sidebar-search {
+    padding: 0 var(--space-3) var(--space-2) var(--space-4);
+    gap: var(--space-1);
+  }
+
+  .sidebar-search .icon-btn {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+  }
+
+  .search-input {
+    height: 44px;
+    font-size: var(--font-size-base); /* 16px stops iOS from zooming on focus */
+    border-radius: var(--radius-full);
+    background: var(--color-bg);
+    box-shadow: none;
+  }
+
+  .search-input-wrap {
+    min-width: 0;
+  }
+
+  .conversation-list {
+    padding: 0 var(--space-2) var(--space-2);
+    overscroll-behavior: contain;
+  }
+
+  .conversation-item {
+    padding: var(--space-2) var(--space-2);
+    min-height: 64px;
+    -webkit-tap-highlight-color: transparent;
+  }
 }

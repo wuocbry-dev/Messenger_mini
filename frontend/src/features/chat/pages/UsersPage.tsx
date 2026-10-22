@@ -315,11 +315,12 @@ export function UsersPage() {
                       className={`user-card-message-btn${selectedId === user.id ? ' user-card-message-btn--primary' : ''}`}
                       onClick={() => void handleMessage(user.id)}
                       disabled={creatingConv === user.id}
+                      aria-label={`Message ${user.displayName}`}
                     >
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                       </svg>
-                      {creatingConv === user.id ? 'Opening...' : 'Message'}
+                      <span className="user-card-message-label">{creatingConv === user.id ? 'Opening...' : 'Message'}</span>
                     </button>
 
                     <div className="user-card-menu-wrap">

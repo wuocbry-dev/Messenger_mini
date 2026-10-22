@@ -56,13 +56,13 @@ export function NewGroupModal({ open, onClose, onCreated }: NewGroupModalProps) 
 
         <PeoplePicker selected={selected} onChange={setSelected} max={MAX_OTHERS} />
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)' }}>
           <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>
             {selected.length < MIN_OTHERS
               ? `Choose at least ${MIN_OTHERS} people`
               : `${selected.length + 1} people including you`}
           </span>
-          <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+          <div style={{ display: 'flex', gap: 'var(--space-2)', marginLeft: 'auto' }}>
             <Button variant="ghost" onClick={onClose}>Cancel</Button>
             <Button variant="primary" onClick={() => void create()} loading={creating} disabled={selected.length < MIN_OTHERS}>
               Create group

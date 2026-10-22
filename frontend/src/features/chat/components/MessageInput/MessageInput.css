@@ -242,3 +242,59 @@
   border-color: var(--color-border);
   border-top-color: var(--color-primary);
 }
+
+/* Phones: compact [attach] [message] [send] row above the keyboard and home indicator. */
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  .message-input-form {
+    padding: var(--space-2) var(--space-2) calc(var(--space-2) + env(safe-area-inset-bottom));
+  }
+
+  .message-input-wrap {
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-1) var(--space-1) var(--space-1);
+    border-radius: 22px;
+  }
+
+  .message-attach-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .message-textarea {
+    min-width: 0;
+    font-size: var(--font-size-base); /* 16px stops iOS from zooming on focus */
+    padding: var(--space-2) 0;
+  }
+
+  /* The pill already shows the focus ring; skip the inner outline. */
+  .message-textarea:focus-visible {
+    outline: none;
+  }
+
+  .message-send-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .message-tray {
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+    padding: var(--space-2);
+  }
+
+  .message-tray-add {
+    width: 48px;
+    height: 48px;
+  }
+
+  .message-tray-item {
+    width: 56px;
+    height: 56px;
+  }
+
+  /* File chips keep the full height so the name and size are not clipped. */
+  .message-tray-item--file {
+    width: 104px;
+    height: 64px;
+  }
+}

@@ -978,3 +978,380 @@
 
   .vcall-tile-name { bottom: 84px; }
 }
+
+/* ── Phones (max-width 767px) ─────────────────────────────── */
+
+/* The More sheet only exists in the phone layout. */
+.vcall-sheet,
+.vcall-sheet-backdrop {
+  display: none;
+}
+
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  /* Voice: fills the content pane (the tab bar is hidden during calls). */
+  .call-panel {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .call-panel-header {
+    padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
+    min-height: 60px;
+  }
+
+  .call-minimize {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    justify-content: center;
+    border-radius: var(--radius-full);
+  }
+
+  .call-minimize > svg,
+  .call-minimize-text {
+    display: none;
+  }
+
+  .call-minimize-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .call-panel-body {
+    gap: var(--space-1);
+    padding: var(--space-3);
+    overflow-y: auto;
+  }
+
+  .call-avatar {
+    width: min(200px, 52vw);
+    height: min(200px, 52vw);
+  }
+
+  .call-avatar-ring--mid {
+    inset: 18px;
+  }
+
+  .call-avatar-photo {
+    width: min(132px, 36vw);
+    height: min(132px, 36vw);
+    padding: 6px;
+  }
+
+  .call-avatar-photo .avatar-initials {
+    font-size: 3rem !important;
+  }
+
+  .call-name {
+    max-width: 100%;
+    font-size: var(--font-size-2xl);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .call-grid {
+    gap: var(--space-2);
+  }
+
+  .call-grid--1,
+  .call-grid--2,
+  .call-grid--3,
+  .call-grid--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  .call-tile {
+    padding: var(--space-3) var(--space-2);
+  }
+
+  .call-tile-avatar .avatar-xl {
+    width: 56px;
+    height: 56px;
+  }
+
+  /* Four secondary controls in a row, a large End button below. */
+  .call-controls {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-3) var(--space-1);
+    padding: var(--space-3) var(--space-3) var(--space-4);
+  }
+
+  .call-ctl {
+    min-width: 0;
+  }
+
+  .call-ctl-circle {
+    width: 56px;
+    height: 56px;
+    margin-bottom: var(--space-1);
+  }
+
+  .call-ctl-circle svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .call-ctl-label {
+    font-size: var(--font-size-xs);
+  }
+
+  .call-ctl-sub {
+    max-width: 100%;
+    font-size: 0.6875rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .call-ctl--end {
+    grid-column: 1 / -1;
+  }
+
+  .call-ctl--end .call-ctl-circle {
+    width: 64px;
+    height: 64px;
+  }
+
+  /* Minimized pill: top of the pane so it never covers the composer. */
+  .active-call--mini {
+    top: calc(env(safe-area-inset-top) + 68px);
+    right: var(--space-2);
+    bottom: auto;
+    max-width: calc(100% - var(--space-4));
+    padding: var(--space-1);
+  }
+
+  .call-mini-main {
+    min-width: 0;
+    padding-right: var(--space-2);
+  }
+
+  .call-mini-text {
+    min-width: 0;
+  }
+
+  .call-mini-name {
+    max-width: 44vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Video: the stage always fills the viewport, even while ringing. */
+  .active-call--video {
+    padding: 0;
+    background: #05070c;
+  }
+
+  .active-call--video .vcall {
+    width: 100%;
+    height: 100%;
+  }
+
+  .vcall-stage {
+    border-radius: 0;
+  }
+
+  .vcall-top {
+    padding: calc(env(safe-area-inset-top) + var(--space-2)) var(--space-2) var(--space-6) var(--space-4);
+    background: linear-gradient(180deg, rgba(5, 7, 12, 0.7), rgba(5, 7, 12, 0));
+    border: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .vcall-peer {
+    flex-wrap: wrap;
+    row-gap: 0;
+  }
+
+  .vcall-peer > .avatar {
+    display: none;
+  }
+
+  .vcall-peer-text {
+    flex: 1 1 100%;
+  }
+
+  /* Duration and permission errors stay visible on phones. */
+  .vcall-timer {
+    display: block;
+    padding: 0;
+    margin: 0;
+    border: none;
+    font-size: var(--font-size-xs);
+    white-space: normal;
+  }
+
+  .vcall-icon-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .vcall-local {
+    top: calc(env(safe-area-inset-top) + 76px);
+    right: var(--space-3);
+    width: clamp(92px, 28vw, 140px);
+    aspect-ratio: 3 / 4;
+    border-radius: var(--radius-xl);
+  }
+
+  .vcall-local--screen {
+    aspect-ratio: 4 / 3;
+  }
+
+  .vcall-notice {
+    top: auto;
+    bottom: calc(env(safe-area-inset-bottom) + 104px);
+    max-width: calc(100% - var(--space-6));
+    text-align: center;
+  }
+
+  /* Name chips sit in each tile's corner, clear of the control bar. */
+  .vcall-tile-name,
+  .vcall-grid--1 .vcall-tile-name {
+    top: auto;
+    left: var(--space-2);
+    bottom: var(--space-2);
+  }
+
+  .vcall-grid--1 .vcall-tile-name,
+  .vcall-grid--2 .vcall-tile:last-child .vcall-tile-name {
+    bottom: calc(env(safe-area-inset-bottom) + 100px);
+  }
+
+  .vcall-placeholder .avatar-xl {
+    width: 96px;
+    height: 96px;
+  }
+
+  /* Compact glass bar: Mute, Video, Flip, More, End. */
+  .vcall-bar--mobile {
+    left: var(--space-3);
+    right: var(--space-3);
+    bottom: calc(env(safe-area-inset-bottom) + var(--space-3));
+    transform: none;
+    max-width: none;
+    justify-content: space-around;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-full);
+    overflow: visible;
+  }
+
+  .vcall-bar--mobile .vcall-ctl {
+    min-width: 0;
+  }
+
+  .vcall-bar--mobile .vcall-ctl-circle {
+    width: 52px;
+    height: 52px;
+    background: rgba(255, 255, 255, 0.16);
+    color: #fff;
+    box-shadow: none;
+  }
+
+  .vcall-bar--mobile .vcall-ctl--off .vcall-ctl-circle {
+    background: rgba(255, 255, 255, 0.92);
+    color: #111827;
+  }
+
+  .vcall-bar--mobile .vcall-ctl--active .vcall-ctl-circle {
+    background: var(--color-primary);
+  }
+
+  .vcall-bar--mobile .vcall-ctl--end .vcall-ctl-circle {
+    width: 58px;
+    height: 58px;
+    background: var(--color-danger);
+  }
+
+  /* More sheet opens above the bar. */
+  .vcall-sheet-backdrop {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    background: rgba(0, 0, 0, 0.35);
+  }
+
+  .vcall-sheet {
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    left: var(--space-3);
+    right: var(--space-3);
+    bottom: calc(env(safe-area-inset-bottom) + 92px);
+    z-index: 5;
+    padding: var(--space-2);
+    border-radius: var(--radius-2xl);
+    background: rgba(20, 24, 36, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    animation: fadeIn var(--transition-fast) ease-out;
+  }
+
+  .vcall-sheet-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    min-height: 48px;
+    padding: 0 var(--space-3);
+    border: none;
+    border-radius: var(--radius-xl);
+    background: transparent;
+    color: #fff;
+    font: inherit;
+    font-size: var(--font-size-sm);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .vcall-sheet-item > span:first-of-type {
+    flex: 1;
+  }
+
+  .vcall-sheet-item svg {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+  }
+
+  .vcall-sheet-item:active:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .vcall-sheet-item:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .vcall-sheet-item .vcall-switch {
+    flex-shrink: 0;
+    pointer-events: none;
+  }
+}
+
+/* Portrait phones: stack two people instead of two thin columns. */
+@media (max-width: 767px) and (orientation: portrait) {
+  .vcall-grid--2 { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+  .vcall-grid--5,
+  .vcall-grid--6 { grid-template-columns: 1fr 1fr; grid-template-rows: repeat(3, 1fr); }
+}
+
+/* Landscape phones: a short viewport, so drop the decorative voice avatar
+   and keep the video preview small. Touch devices only, so desktop is untouched. */
+@media (max-height: 500px) and (orientation: landscape) and (pointer: coarse) {
+  .call-avatar,
+  .call-wave {
+    display: none;
+  }
+
+  /* Below the top bar, which holds the minimize and fullscreen buttons. */
+  .vcall-local {
+    top: calc(env(safe-area-inset-top) + 64px);
+    width: clamp(96px, 16vw, 150px);
+    aspect-ratio: 4 / 3;
+  }
+}

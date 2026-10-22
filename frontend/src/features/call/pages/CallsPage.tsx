@@ -8,6 +8,7 @@ import { callApi } from '../api/callApi';
 import { userApi } from '../../chat/api/userApi';
 import { loadAuthFromStorage } from '../../auth/store/authStore';
 import { parseUtc } from '../../../shared/utils/datetime';
+import { MOBILE_QUERY } from '../../../shared/hooks/useIsMobile';
 import type { CallResponse, UserSearchResult } from '../../../shared/types';
 import './CallsPage.css';
 
@@ -168,7 +169,9 @@ export function CallsPage() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [panelOpen, setPanelOpen] = useState(true);
+  // Desktop shows the newest call's details beside the list; on phones the
+  // details are a full-screen page, so the history list comes first.
+  const [panelOpen, setPanelOpen] = useState(() => !window.matchMedia(MOBILE_QUERY).matches);
   const [menuId, setMenuId] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -424,6 +427,15 @@ export function CallsPage() {
                         <span className="call-row-clock">{formatClock(call.startedAt)}</span>
                       </span>
                       <span className="call-row-duration">{formatDuration(call)}</span>
+                    </button>
+
+                    {/* Phone layout: one-tap call back with the same call type. */}
+                    <button
+                      className="call-row-callback"
+                      onClick={() => startCall(call, call.callType === 'VIDEO' ? 'VIDEO' : 'VOICE')}
+                      aria-label={`${call.callType === 'VIDEO' ? 'Video call' : 'Call'} ${peer.name} again`}
+                    >
+                      {call.callType === 'VIDEO' ? <VideoIcon /> : <PhoneIcon />}
                     </button>
 
                     <div className="call-row-menu-wrap">

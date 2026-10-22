@@ -4,6 +4,7 @@ import { Skeleton } from '../../../../shared/components/ui/Skeleton';
 import type { Conversation, Message, MessageAttachment } from '../../../../shared/types';
 import { messageApi } from '../../api/messageApi';
 import { ImageLightbox } from '../ImageLightbox';
+import { openResolvedUrl } from '../../../../shared/utils/openResolvedUrl';
 import './SharedMediaDrawer.css';
 
 interface SharedMediaDrawerProps {
@@ -83,8 +84,7 @@ export function SharedMediaDrawer({ conversation, open, onClose }: SharedMediaDr
 
   const openFile = useCallback(async (fileId: number) => {
     try {
-      const file = await messageApi.getFile(fileId);
-      window.open(file.downloadUrl, '_blank', 'noopener,noreferrer');
+      await openResolvedUrl(async () => (await messageApi.getFile(fileId)).downloadUrl);
     } catch (err) {
       console.error('Open failed:', err);
     }

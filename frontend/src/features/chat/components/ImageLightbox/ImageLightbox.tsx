@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import './ImageLightbox.css';
 
@@ -26,6 +26,19 @@ export function ImageLightbox({ images, urls, startIndex, onClose }: ImageLightb
     (delta: number) => setIndex((i) => (i + delta + count) % count),
     [count]
   );
+
+  // Horizontal swipe on touch screens moves between images.
+  const touchStartX = useRef<number | null>(null);
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches.length === 1 ? e.touches[0].clientX : null;
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const start = touchStartX.current;
+    touchStartX.current = null;
+    if (start === null || count < 2) return;
+    const dx = e.changedTouches[0].clientX - start;
+    if (Math.abs(dx) > 50) go(dx < 0 ? 1 : -1);
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -91,7 +104,12 @@ export function ImageLightbox({ images, urls, startIndex, onClose }: ImageLightb
         </button>
       </div>
 
-      <div className="lightbox-stage" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="lightbox-stage"
+        onClick={(e) => e.stopPropagation()}
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+      >
         {url ? (
           <img key={current.fileId} className="lightbox-image" src={url} alt={current.name ?? 'Image'} />
         ) : (

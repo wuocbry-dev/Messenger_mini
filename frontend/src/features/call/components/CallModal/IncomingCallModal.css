@@ -117,3 +117,108 @@
   color: var(--color-text-muted);
   margin: 0;
 }
+
+.call-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Desktop shows icon-only buttons; phones add text labels. */
+.call-action-label {
+  display: none;
+}
+
+/* Phones: a tall call surface, above the tab bar and clear of the home indicator. */
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  .modal-panel.incoming-call-panel {
+    max-width: none;
+    min-height: min(560px, 78dvh);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    border-radius: var(--radius-3xl);
+    background:
+      radial-gradient(500px 320px at 50% 25%, rgba(124, 92, 252, 0.14), transparent 70%),
+      var(--color-surface);
+  }
+
+  /* Positioned against the page overlay, which is off-centre on a phone. */
+  .incoming-call-panel .call-modal-pulse-ring {
+    display: none;
+  }
+
+  .incoming-call-panel .call-modal {
+    gap: var(--space-3);
+    padding: var(--space-8) var(--space-4) calc(var(--space-6) + env(safe-area-inset-bottom));
+  }
+
+  .incoming-call-panel .call-modal-avatar {
+    width: 120px;
+    height: 120px;
+  }
+
+  .incoming-call-panel .call-modal-avatar .avatar {
+    width: 120px !important;
+    height: 120px !important;
+  }
+
+  .incoming-call-panel .call-modal-title {
+    font-size: var(--font-size-2xl);
+  }
+
+  .incoming-call-panel .call-modal-subtitle {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .incoming-call-panel .call-modal-actions {
+    width: 100%;
+    justify-content: space-around;
+    gap: var(--space-4);
+    margin-top: var(--space-8);
+  }
+
+  .call-action-label {
+    display: block;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-secondary);
+  }
+}
+
+/* Landscape phones: a short screen, so compact the call card to fit without scrolling. */
+@media (max-height: 500px) and (orientation: landscape) and (pointer: coarse) {
+  .modal-panel.incoming-call-panel {
+    min-height: 0;
+  }
+
+  .incoming-call-panel .call-modal {
+    gap: var(--space-1);
+    padding: var(--space-4) var(--space-4) calc(var(--space-4) + env(safe-area-inset-bottom));
+  }
+
+  .incoming-call-panel .call-modal-avatar,
+  .incoming-call-panel .call-modal-avatar .avatar {
+    width: 72px !important;
+    height: 72px !important;
+  }
+
+  .incoming-call-panel .call-modal-title {
+    font-size: var(--font-size-xl);
+  }
+
+  .incoming-call-panel .call-modal-actions {
+    margin-top: var(--space-3);
+  }
+
+  .incoming-call-panel .call-action-btn {
+    width: 64px;
+    height: 64px;
+  }
+
+  .incoming-call-panel .call-modal-hint {
+    display: none;
+  }
+}

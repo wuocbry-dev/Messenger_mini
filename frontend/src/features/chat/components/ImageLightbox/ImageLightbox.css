@@ -169,3 +169,41 @@
   .lightbox-nav--prev { left: var(--space-2); }
   .lightbox-nav--next { right: var(--space-2); }
 }
+
+/* Phones: edge-to-edge image inside the safe areas; controls stay tappable. */
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  .lightbox {
+    height: var(--app-height, 100dvh);
+    bottom: auto;
+  }
+
+  .lightbox-stage {
+    max-width: 100%;
+    max-height: calc(100% - 140px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    touch-action: pan-y pinch-zoom;
+  }
+
+  .lightbox-image {
+    max-height: calc(var(--app-height, 100dvh) - 140px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+
+  .lightbox-actions {
+    top: calc(env(safe-area-inset-top) + var(--space-3));
+    right: var(--space-3);
+  }
+
+  .lightbox-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .lightbox-nav {
+    width: 44px;
+    height: 44px;
+    background: rgba(0, 0, 0, 0.35);
+  }
+
+  .lightbox-thumbs {
+    bottom: calc(env(safe-area-inset-bottom) + var(--space-3));
+  }
+}

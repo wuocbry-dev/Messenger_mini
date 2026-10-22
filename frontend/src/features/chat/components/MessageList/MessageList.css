@@ -368,3 +368,36 @@
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
 }
+
+/* Phones: wider bubbles, tighter gutters, and long words/links never overflow. */
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  .message-list {
+    padding: var(--space-3) var(--space-3);
+    overscroll-behavior: contain;
+  }
+
+  .message-row {
+    gap: var(--space-2);
+  }
+
+  .message-bubble {
+    max-width: min(82%, 560px); /* landscape phones are wide */
+    min-width: 0;
+  }
+
+  .message-bubble--media {
+    max-width: min(85%, 300px);
+  }
+
+  .message-content {
+    overflow-wrap: anywhere;
+  }
+
+  .message-file {
+    min-width: 0;
+  }
+
+  .message-file-link {
+    min-width: 0;
+  }
+}

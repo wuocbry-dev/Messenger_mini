@@ -85,3 +85,14 @@
   gap: var(--space-2);
   margin-top: var(--space-2);
 }
+
+/* Phones: shorter results list so the action buttons stay above the keyboard. */
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  .new-conv-results {
+    max-height: min(240px, 34dvh);
+  }
+
+  .new-conv-result {
+    min-height: 56px;
+  }
+}

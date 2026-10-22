@@ -3,6 +3,7 @@ import type { ILocalVideoTrack, IRemoteVideoTrack } from 'agora-rtc-sdk-ng';
 import { Avatar } from '../../../../shared/components/ui';
 import type { CallParticipant } from '../../../../shared/types';
 import type { AgoraState } from '../../hooks/useAgora';
+import { useIsMobile } from '../../../../shared/hooks/useIsMobile';
 import { AddPeopleModal } from '../AddPeopleModal';
 import './ActiveCall.css';
 
@@ -111,6 +112,27 @@ const FullscreenIcon = ({ exit }: { exit: boolean }) => (
   </svg>
 );
 
+const FlipCameraIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M20 16v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2l2-3h4l2 3h2a2 2 0 0 1 2 2v2" />
+    <polyline points="23 10 20 13 17 10" />
+    <circle cx="12" cy="13" r="3" />
+  </svg>
+);
+
+const MoreIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <circle cx="5" cy="12" r="2" />
+    <circle cx="12" cy="12" r="2" />
+    <circle cx="19" cy="12" r="2" />
+  </svg>
+);
+
+/** Phones and tablets often lack screen capture (iOS) or element fullscreen (iPhone). */
+const canShareScreen = () =>
+  typeof navigator !== 'undefined' && typeof navigator.mediaDevices?.getDisplayMedia === 'function';
+const canFullscreen = () => typeof document !== 'undefined' && !!document.fullscreenEnabled;
+
 const EndIcon = () => (
   <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.38 2 2 0 0 1 3.6 1.22h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" transform="rotate(135 12 12)" />
@@ -142,7 +164,11 @@ export function ActiveCall({
   const [addOpen, setAddOpen] = useState(false);
   const [cameras, setCameras] = useState<{ id: string; label: string }[]>([]);
   const [fullscreen, setFullscreen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile();
+  const shareSupported = useMemo(canShareScreen, []);
+  const fullscreenSupported = useMemo(canFullscreen, []);
 
   const present = useMemo(
     () => participants.filter((p) => p.state === 'JOINED' || p.state === 'INVITED'),
@@ -167,12 +193,25 @@ export function ActiveCall({
 
   const toggleFullscreen = () => {
     if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
-    else void rootRef.current?.requestFullscreen().catch(() => {});
+    // Rejected or unsupported: the in-app stage already fills the viewport.
+    else void rootRef.current?.requestFullscreen?.().catch(() => {});
   };
 
   useEffect(() => {
     if (settingsOpen) void listCameras().then(setCameras);
   }, [settingsOpen, listCameras]);
+
+  // Phones get a one-tap camera flip, shown when there is more than one camera.
+  useEffect(() => {
+    if (isMobile && video && state.cameraOn) void listCameras().then(setCameras);
+  }, [isMobile, video, state.cameraOn, listCameras]);
+
+  const flipCamera = () => {
+    if (cameras.length < 2) return;
+    const current = state.localVideo?.getMediaStreamTrack().getSettings().deviceId;
+    const index = cameras.findIndex((c) => c.id === current);
+    onSwitchCamera(cameras[(index + 1) % cameras.length].id);
+  };
 
   useEffect(() => {
     if (!state.remoteJoined || connectedAt === null) {
@@ -280,9 +319,11 @@ export function ActiveCall({
                 <button className="vcall-icon-btn" onClick={() => setMinimized(true)} aria-label="Minimize call" title="Minimize">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12" /></svg>
                 </button>
-                <button className="vcall-icon-btn" onClick={toggleFullscreen} aria-label={fullscreen ? 'Exit full screen' : 'Full screen'} title="Full screen">
-                  <FullscreenIcon exit={fullscreen} />
-                </button>
+                {fullscreenSupported && (
+                  <button className="vcall-icon-btn" onClick={toggleFullscreen} aria-label={fullscreen ? 'Exit full screen' : 'Full screen'} title="Full screen">
+                    <FullscreenIcon exit={fullscreen} />
+                  </button>
+                )}
               </div>
             </header>
 
@@ -292,7 +333,7 @@ export function ActiveCall({
 
             {state.notice && <p className="vcall-notice" role="status">{state.notice}</p>}
 
-            {settingsOpen && (
+            {settingsOpen && !isMobile && (
               <div className="vcall-settings" role="menu">
                 <div className="vcall-settings-row">
                   <span>Speaker</span>
@@ -320,6 +361,113 @@ export function ActiveCall({
               </div>
             )}
 
+            {isMobile ? (
+              <>
+                {moreOpen && (
+                  <>
+                    <div className="vcall-sheet-backdrop" onClick={() => setMoreOpen(false)} aria-hidden="true" />
+                    <div className="vcall-sheet" role="menu" aria-label="More call options">
+                      <button
+                        role="menuitemcheckbox"
+                        aria-checked={state.speakerOn}
+                        className="vcall-sheet-item"
+                        onClick={onToggleSpeaker}
+                      >
+                        <SpeakerIcon off={!state.speakerOn} />
+                        <span>Speaker</span>
+                        <span className={`vcall-switch${state.speakerOn ? ' vcall-switch--on' : ''}`} aria-hidden="true"><span /></span>
+                      </button>
+                      {shareSupported && (
+                        <button
+                          role="menuitem"
+                          className="vcall-sheet-item"
+                          onClick={() => { setMoreOpen(false); onToggleShare(); }}
+                          disabled={!connected}
+                        >
+                          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <rect x="3" y="4" width="18" height="14" rx="2" />
+                            <polyline points="9 10 12 7 15 10" />
+                            <line x1="12" y1="7" x2="12" y2="14" />
+                            <line x1="8" y1="21" x2="16" y2="21" />
+                          </svg>
+                          <span>{sharing ? 'Stop sharing' : 'Share screen'}</span>
+                        </button>
+                      )}
+                      <button
+                        role="menuitem"
+                        className="vcall-sheet-item"
+                        onClick={() => { setMoreOpen(false); setAddOpen(true); }}
+                        disabled={room <= 0}
+                      >
+                        <AddPersonIcon />
+                        <span>Add people</span>
+                      </button>
+                      <button
+                        role="menuitem"
+                        className="vcall-sheet-item"
+                        onClick={() => { setMoreOpen(false); setMinimized(true); }}
+                      >
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                        </svg>
+                        <span>Back to chat</span>
+                      </button>
+                      {fullscreenSupported && (
+                        <button
+                          role="menuitem"
+                          className="vcall-sheet-item"
+                          onClick={() => { setMoreOpen(false); toggleFullscreen(); }}
+                        >
+                          <FullscreenIcon exit={fullscreen} />
+                          <span>{fullscreen ? 'Exit full screen' : 'Full screen'}</span>
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+                <div className="vcall-bar vcall-bar--mobile">
+                  <button
+                    className={`vcall-ctl${state.localMuted ? ' vcall-ctl--off' : ''}`}
+                    onClick={onToggleMute}
+                    aria-pressed={state.localMuted}
+                    aria-label={state.localMuted ? 'Unmute microphone' : 'Mute microphone'}
+                  >
+                    <span className="vcall-ctl-circle"><MicIcon off={state.localMuted} /></span>
+                  </button>
+                  <button
+                    className={`vcall-ctl${!state.cameraOn ? ' vcall-ctl--off' : ''}`}
+                    onClick={onToggleCamera}
+                    disabled={sharing}
+                    aria-pressed={!state.cameraOn}
+                    aria-label={state.cameraOn ? 'Stop video' : 'Start video'}
+                  >
+                    <span className="vcall-ctl-circle"><CameraIcon off={!state.cameraOn} /></span>
+                  </button>
+                  {cameras.length > 1 && (
+                    <button
+                      className="vcall-ctl"
+                      onClick={flipCamera}
+                      disabled={!state.cameraOn || sharing}
+                      aria-label="Switch camera"
+                    >
+                      <span className="vcall-ctl-circle"><FlipCameraIcon /></span>
+                    </button>
+                  )}
+                  <button
+                    className={`vcall-ctl${moreOpen ? ' vcall-ctl--active' : ''}`}
+                    onClick={() => setMoreOpen((o) => !o)}
+                    aria-expanded={moreOpen}
+                    aria-haspopup="menu"
+                    aria-label="More call options"
+                  >
+                    <span className="vcall-ctl-circle"><MoreIcon /></span>
+                  </button>
+                  <button className="vcall-ctl vcall-ctl--end" onClick={onEnd} aria-label="End call">
+                    <span className="vcall-ctl-circle"><EndIcon /></span>
+                  </button>
+                </div>
+              </>
+            ) : (
             <div className="vcall-bar">
               <button
                 className={`vcall-ctl${state.localMuted ? ' vcall-ctl--off' : ''}`}
@@ -393,6 +541,7 @@ export function ActiveCall({
                 <span className="vcall-ctl-label">End Call</span>
               </button>
             </div>
+            )}
           </div>
         </div>
         {addModal}
@@ -415,13 +564,13 @@ export function ActiveCall({
               </span>
             </div>
           </div>
-          <button className="call-minimize" onClick={() => setMinimized(true)}>
+          <button className="call-minimize" onClick={() => setMinimized(true)} aria-label="Minimize to chat">
             <span className="call-minimize-icon" aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
               </svg>
             </span>
-            Minimize to chat
+            <span className="call-minimize-text">Minimize to chat</span>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <line x1="7" y1="17" x2="17" y2="7" />
               <polyline points="7 7 17 7 17 17" />
