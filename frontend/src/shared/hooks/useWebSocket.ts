@@ -42,10 +42,15 @@ export function useWebSocket(handlers: WsHandlers) {
   const [status, setStatus] = useState<WsStatus>('disconnected');
   const clientRef = useRef<Client | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Bumped by every connect and by unmount. connect() awaits a token refresh,
+  // so an older call that resumes late must not open a second connection
+  // (every event would then arrive twice).
+  const attemptRef = useRef(0);
   const handlersRef = useRef(handlers);
   handlersRef.current = handlers;
 
   const connect = useCallback(async () => {
+    const attempt = ++attemptRef.current;
     if (reconnectTimer.current) {
       clearTimeout(reconnectTimer.current);
       reconnectTimer.current = null;
@@ -60,6 +65,7 @@ export function useWebSocket(handlers: WsHandlers) {
     // Renew the access token first if it is about to expire, so reconnects after
     // sleep or a long offline period still authenticate.
     await ensureFreshToken();
+    if (attempt !== attemptRef.current) return; // superseded or unmounted meanwhile
     const token = tokenStorage.getAccess();
     if (!token) {
       setStatus('disconnected');
@@ -167,6 +173,7 @@ export function useWebSocket(handlers: WsHandlers) {
   useEffect(() => {
     void connect();
     return () => {
+      attemptRef.current++;
       if (reconnectTimer.current) {
         clearTimeout(reconnectTimer.current);
         reconnectTimer.current = null;

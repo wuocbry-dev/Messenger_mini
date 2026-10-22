@@ -243,3 +243,12 @@ rebuild the call from any single event. Types:
   `ACCEPTED` until someone leaves; there is no server-side cleanup yet
   (the migration closes such calls older than a day).
 - Agora media is routed by Agora; the backend never proxies it.
+
+## Call history in the chat
+
+Every finished call is also recorded in its conversation's message timeline, so it shows up in the chat on desktop and phones, like Messenger.
+
+- When a call reaches a final state (ENDED, REJECTED, CANCELLED, MISSED), `CallService` calls `CallMessageService.recordFinishedCall`. That writes one message of type `CALL` with `call_id` set, the caller as sender, and the time the call finished. A group call is recorded once, when the whole call ends, not when one person leaves or declines.
+- The message is published after commit on the normal `/user/queue/messages` queue, so open chats and the conversation list update in real time. It creates receipts for the other members like any message.
+- `MessageResponse.call` (`MessageCallResponse`) carries `callType`, `status`, `callerId`, start/answer/end times, `durationSeconds` (null if nobody answered), `groupCall` and `joinedCount`. The client words it per viewer: the caller sees "Voice call · No answer", the other person sees a red "Missed voice call", and so on. Each entry has "Call back" / "Call again", which starts a new call of the same type.
+- Clients cannot send `CALL` or `SYSTEM` messages; `/app/chat.send` turns those types into TEXT.

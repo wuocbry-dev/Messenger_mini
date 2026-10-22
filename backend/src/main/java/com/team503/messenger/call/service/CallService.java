@@ -19,6 +19,7 @@ import com.team503.messenger.conversation.exception.ConversationException;
 import com.team503.messenger.conversation.repository.ConversationMemberRepository;
 import com.team503.messenger.conversation.repository.ConversationRepository;
 import com.team503.messenger.conversation.service.ConversationService;
+import com.team503.messenger.message.service.CallMessageService;
 import com.team503.messenger.user.entity.User;
 import com.team503.messenger.user.repository.UserRepository;
 import com.team503.messenger.user.service.AvatarUrlResolver;
@@ -71,6 +72,7 @@ public class CallService {
     private final AgoraTokenService agoraTokenService;
     private final AgoraProperties agoraProperties;
     private final SimpMessagingTemplate messagingTemplate;
+    private final CallMessageService callMessageService;
     private final Clock clock;
 
     public CallService(
@@ -84,6 +86,7 @@ public class CallService {
             AgoraTokenService agoraTokenService,
             AgoraProperties agoraProperties,
             SimpMessagingTemplate messagingTemplate,
+            CallMessageService callMessageService,
             Clock clock
     ) {
         this.callRepository = callRepository;
@@ -96,6 +99,7 @@ public class CallService {
         this.agoraTokenService = agoraTokenService;
         this.agoraProperties = agoraProperties;
         this.messagingTemplate = messagingTemplate;
+        this.callMessageService = callMessageService;
         this.clock = clock;
     }
 
@@ -190,6 +194,7 @@ public class CallService {
                 .noneMatch(p -> p.isIn(State.INVITED));
         if (call.getStatus() == Call.Status.RINGING && nobodyElseRinging) {
             call.markRejected(userId, LocalDateTime.now(clock));
+            callMessageService.recordFinishedCall(call);
             publish(EventType.REJECTED, call, userId, everyone(callId));
         } else {
             publish(EventType.PARTICIPANT_DECLINED, call, userId, everyone(callId));
@@ -216,6 +221,7 @@ public class CallService {
                 p.leave(now);
             }
         }
+        callMessageService.recordFinishedCall(call);
         publish(EventType.CANCELLED, call, userId, everyone(callId));
         return toResponse(call);
     }
@@ -251,6 +257,7 @@ public class CallService {
                 }
             }
             call.markEnded(userId, now);
+            callMessageService.recordFinishedCall(call);
             publish(EventType.ENDED, call, userId, everyone(callId));
         } else {
             publish(EventType.PARTICIPANT_LEFT, call, userId, everyone(callId));
@@ -377,6 +384,7 @@ public class CallService {
                 }
             }
             call.markMissed(now);
+            callMessageService.recordFinishedCall(call);
             publish(EventType.MISSED, call, null, everyone(call.getId()));
         }
 

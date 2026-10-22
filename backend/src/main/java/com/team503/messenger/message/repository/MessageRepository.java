@@ -17,4 +17,6 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
             ORDER BY m.createdAt DESC, m.id DESC
             """)
     Page<Message> findByConversationIdOrderByCreatedAtDesc(@Param("conversationId") Long conversationId, Pageable pageable);
+
+    boolean existsByCallId(Long callId);
 }

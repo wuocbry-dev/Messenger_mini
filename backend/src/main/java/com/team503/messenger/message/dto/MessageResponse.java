@@ -14,7 +14,9 @@ public record MessageResponse(
         String content,
         LocalDateTime createdAt,
         List<MessageReceiptResponse> receipts,
-        List<MessageAttachmentResponse> attachments
+        List<MessageAttachmentResponse> attachments,
+        /** Set only for CALL messages. */
+        MessageCallResponse call
 ) {
 
     public static MessageResponse from(Message message, String senderUsername, String senderDisplayName, List<MessageReceiptResponse> receipts) {
@@ -28,7 +30,8 @@ public record MessageResponse(
                 message.getContent(),
                 message.getCreatedAt(),
                 receipts,
-                List.of()
+                List.of(),
+                null
         );
     }
 }

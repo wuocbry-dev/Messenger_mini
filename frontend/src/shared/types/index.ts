@@ -70,8 +70,10 @@ export interface Message {
   senderUsername: string;
   senderDisplayName: string;
   senderAvatarUrl?: string;
-  type: 'TEXT' | 'IMAGE' | 'FILE';
+  type: 'TEXT' | 'IMAGE' | 'FILE' | 'SYSTEM' | 'CALL';
   content?: string;
+  /** Set on CALL messages: the finished call this timeline entry records. */
+  call?: MessageCall;
   attachments?: MessageAttachment[];
   objectKey?: string;
   fileName?: string;
@@ -80,6 +82,20 @@ export interface Message {
   downloadUrl?: string;
   createdAt: string;
   receipts: MessageReceipt[];
+}
+
+export interface MessageCall {
+  callId: number;
+  callType: 'VOICE' | 'VIDEO';
+  status: 'ENDED' | 'MISSED' | 'CANCELLED' | 'REJECTED' | 'FAILED' | 'RINGING' | 'ACCEPTED';
+  callerId: number;
+  startedAt: string;
+  answeredAt?: string | null;
+  endedAt?: string | null;
+  /** Talk time; null when nobody answered. */
+  durationSeconds?: number | null;
+  groupCall: boolean;
+  joinedCount: number;
 }
 
 export interface MessageAttachment {

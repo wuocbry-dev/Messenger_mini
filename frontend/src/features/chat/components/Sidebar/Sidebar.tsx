@@ -4,6 +4,7 @@ import { Avatar, Badge, EmptyState, Skeleton, SkeletonAvatar, IconButton } from 
 import { NewConversationModal } from '../NewConversationModal';
 import { NewGroupModal } from '../NewGroupModal';
 import { getConversationTitle } from '../../utils/conversationName';
+import { callPreview } from '../../utils/callMessage';
 import './Sidebar.css';
 
 interface SidebarProps {
@@ -141,8 +142,10 @@ export function Sidebar({
                   </span>
                   {conv.lastMessage && (
                     <span className="conversation-item-preview truncate">
-                      {conv.lastMessage.content ??
-                        (conv.lastMessage.type === 'IMAGE' ? '📷 Image' : 'Attachment')}
+                      {conv.lastMessage.type === 'CALL' && conv.lastMessage.call
+                        ? callPreview(conv.lastMessage.call, currentUserId)
+                        : conv.lastMessage.content ??
+                          (conv.lastMessage.type === 'IMAGE' ? '📷 Image' : 'Attachment')}
                     </span>
                   )}
                 </div>

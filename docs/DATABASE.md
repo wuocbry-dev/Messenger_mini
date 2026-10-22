@@ -21,6 +21,11 @@ The existing root file `messenger_mini_mysql_schema.sql` records the current app
 
 `backend/src/main/resources/db/migration/V1__initial_schema.sql` contains the same table baseline without `CREATE DATABASE` or `USE` statements. Existing non-empty databases should be baselined at version 1 one time only so Flyway records the current schema without rerunning `V1`. Empty databases should run `V1` normally.
 
+## Later Migrations
+
+- `V2__group_calls.sql`: `call_participants`, nullable `calls.callee_id` for group calls.
+- `V3__call_messages.sql`: call history in the chat timeline. Adds `messages.call_id` (nullable, unique, `ON DELETE SET NULL` to `calls`), allows message type `CALL`, and backfills one CALL message for every call that had already finished (ENDED, REJECTED, CANCELLED, MISSED). FAILED calls are abandoned sessions and are skipped.
+
 ## Rules
 
 - Flyway owns schema evolution.

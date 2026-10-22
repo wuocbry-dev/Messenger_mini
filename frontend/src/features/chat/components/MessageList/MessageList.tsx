@@ -4,6 +4,8 @@ import { Avatar, EmptyState, Skeleton } from '../../../../shared/components/ui';
 import { messageApi } from '../../api';
 import { ImageLightbox, type LightboxImage } from '../ImageLightbox';
 import { openResolvedUrl } from '../../../../shared/utils/openResolvedUrl';
+import { parseUtc } from '../../../../shared/utils/datetime';
+import { describeCallMessage } from '../../utils/callMessage';
 import './MessageList.css';
 
 interface MessageListProps {
@@ -16,14 +18,23 @@ interface MessageListProps {
   loading: boolean;
   /** Resolves a user's avatar URL; the message payload does not carry one. */
   getUserAvatar?: (userId: number) => string | undefined;
+  /** Starts a new call of the given type from a call entry in the timeline. */
+  onCallBack?: (type: 'VOICE' | 'VIDEO') => void;
+  /** A call is already running, so call entries cannot start another. */
+  callDisabled?: boolean;
+}
+
+/** Message times are UTC without a zone suffix; show them in local time. */
+function toDate(iso: string): Date {
+  return new Date(parseUtc(iso) ?? Date.now());
 }
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return toDate(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 function formatDate(iso: string): string {
-  const d = new Date(iso);
+  const d = toDate(iso);
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
@@ -35,7 +46,7 @@ function formatDate(iso: string): string {
 
 function shouldShowDate(prev: Message | null, curr: Message): boolean {
   if (!prev) return true;
-  return new Date(prev.createdAt).toDateString() !== new Date(curr.createdAt).toDateString();
+  return toDate(prev.createdAt).toDateString() !== toDate(curr.createdAt).toDateString();
 }
 
 function isImageAttachment(attachment: MessageAttachment): boolean {
@@ -64,8 +75,8 @@ function groupMessages(messages: Message[]): MessageGroup[] {
       isImageOnly(msg) &&
       isImageOnly(prev) &&
       prev.senderId === msg.senderId &&
-      new Date(prev.createdAt).toDateString() === new Date(msg.createdAt).toDateString() &&
-      new Date(msg.createdAt).getTime() - new Date(prev.createdAt).getTime() <= GROUP_WINDOW_MS
+      toDate(prev.createdAt).toDateString() === toDate(msg.createdAt).toDateString() &&
+      toDate(msg.createdAt).getTime() - toDate(prev.createdAt).getTime() <= GROUP_WINDOW_MS
     ) {
       last.messages.push(msg);
     } else {
@@ -106,7 +117,17 @@ function ReceiptIcon({ receipt }: { receipt: MessageReceipt }) {
   );
 }
 
-export function MessageList({ messages, currentUserId, typingUser, typingUserAvatar, typingPlural, loading, getUserAvatar }: MessageListProps) {
+export function MessageList({
+  messages,
+  currentUserId,
+  typingUser,
+  typingUserAvatar,
+  typingPlural,
+  loading,
+  getUserAvatar,
+  onCallBack,
+  callDisabled,
+}: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [fileUrls, setFileUrls] = useState<Record<number, string>>({});
   const [lightbox, setLightbox] = useState<{ images: LightboxImage[]; index: number } | null>(null);
@@ -202,6 +223,7 @@ export function MessageList({ messages, currentUserId, typingUser, typingUserAva
         const imageAttachments = attachments.filter(isImageAttachment);
         const fileAttachments = attachments.filter((attachment) => !isImageAttachment(attachment));
         const hasAttachments = imageAttachments.length > 0 || fileAttachments.length > 0;
+        const call = msg.type === 'CALL' && msg.call ? describeCallMessage(msg.call, currentUserId) : null;
 
         return (
           <React.Fragment key={first.id}>
@@ -218,12 +240,44 @@ export function MessageList({ messages, currentUserId, typingUser, typingUserAva
                   size="sm"
                 />
               )}
-              <div className={`message-bubble${isOwn ? ' message-bubble--own' : ''}${hasAttachments ? ' message-bubble--media' : ''}`}>
-                {!isOwn && (
+              <div className={`message-bubble${isOwn ? ' message-bubble--own' : ''}${hasAttachments ? ' message-bubble--media' : ''}${call ? ' message-bubble--call' : ''}`}>
+                {!isOwn && !call && (
                   <span className="message-sender">{msg.senderDisplayName}</span>
                 )}
                 {msg.type === 'TEXT' && (
                   <p className="message-content">{msg.content}</p>
+                )}
+                {call && msg.call && (
+                  <div className={`message-call${call.missed ? ' message-call--missed' : ''}`}>
+                    <div className="message-call-main">
+                      <span className="message-call-icon" aria-hidden="true">
+                        {call.video ? (
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polygon points="23 7 16 12 23 17 23 7" />
+                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+                          </svg>
+                        ) : (
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.38 2 2 0 0 1 3.6 1.22h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                          </svg>
+                        )}
+                      </span>
+                      <span className="message-call-text">
+                        <span className="message-call-title">{call.title}</span>
+                        {call.detail && <span className="message-call-detail">{call.detail}</span>}
+                      </span>
+                    </div>
+                    {onCallBack && (
+                      <button
+                        type="button"
+                        className="message-call-action"
+                        onClick={() => onCallBack(msg.call!.callType)}
+                        disabled={callDisabled}
+                      >
+                        {call.missed ? 'Call back' : 'Call again'}
+                      </button>
+                    )}
+                  </div>
                 )}
                 {imageAttachments.length > 1 && (
                   <div className="message-attachment">
@@ -317,7 +371,7 @@ export function MessageList({ messages, currentUserId, typingUser, typingUserAva
                 )}
                 <div className="message-meta">
                   <span className="message-time">{formatTime(msg.createdAt)}</span>
-                  {isOwn && msg.receipts?.length > 0 && (
+                  {isOwn && !call && msg.receipts?.length > 0 && (
                     <ReceiptIcon receipt={summarizeReceipts(msg.receipts)} />
                   )}
                 </div>

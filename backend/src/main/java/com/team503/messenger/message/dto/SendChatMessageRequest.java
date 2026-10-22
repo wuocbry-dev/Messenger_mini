@@ -29,7 +29,9 @@ public record SendChatMessageRequest(
             return Message.Type.TEXT;
         }
         try {
-            return Message.Type.valueOf(type.toUpperCase());
+            Message.Type parsed = Message.Type.valueOf(type.toUpperCase());
+            // CALL and SYSTEM entries are written by the server only.
+            return parsed == Message.Type.CALL || parsed == Message.Type.SYSTEM ? Message.Type.TEXT : parsed;
         } catch (IllegalArgumentException e) {
             return Message.Type.TEXT;
         }

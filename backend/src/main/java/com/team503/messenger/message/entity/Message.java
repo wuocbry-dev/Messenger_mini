@@ -17,7 +17,9 @@ public class Message {
         TEXT,
         IMAGE,
         FILE,
-        SYSTEM
+        SYSTEM,
+        /** A finished voice/video call; details come from the linked call. */
+        CALL
     }
 
     @Id
@@ -30,6 +32,9 @@ public class Message {
 
     @Column(name = "sender_id", nullable = false, columnDefinition = "BIGINT UNSIGNED")
     private Long senderId;
+
+    @Column(name = "call_id", columnDefinition = "BIGINT UNSIGNED")
+    private Long callId;
 
     @Column(name = "type", nullable = false, length = 20)
     private String type;
@@ -60,6 +65,13 @@ public class Message {
         return new Message(conversationId, senderId, type.name(), content == null ? null : content.trim(), createdAt);
     }
 
+    /** The timeline entry for a finished call, shown on the caller's side. */
+    public static Message call(Long conversationId, Long callerId, Long callId, LocalDateTime createdAt) {
+        Message message = new Message(conversationId, callerId, Type.CALL.name(), null, createdAt);
+        message.callId = callId;
+        return message;
+    }
+
     public Long getId() {
         return id;
     }
@@ -70,6 +82,10 @@ public class Message {
 
     public Long getSenderId() {
         return senderId;
+    }
+
+    public Long getCallId() {
+        return callId;
     }
 
     public String getType() {

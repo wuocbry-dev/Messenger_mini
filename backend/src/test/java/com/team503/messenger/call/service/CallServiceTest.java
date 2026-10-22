@@ -27,6 +27,7 @@ import com.team503.messenger.conversation.repository.ConversationMemberRepositor
 import com.team503.messenger.conversation.repository.ConversationRepository;
 import com.team503.messenger.conversation.service.ConversationService;
 import com.team503.messenger.file.service.ObjectStorageService;
+import com.team503.messenger.message.service.CallMessageService;
 import com.team503.messenger.user.entity.User;
 import com.team503.messenger.user.repository.UserRepository;
 import com.team503.messenger.user.service.AvatarUrlResolver;
@@ -74,6 +75,7 @@ class CallServiceTest {
     private UserRepository userRepository;
     private AgoraTokenService tokenService;
     private SimpMessagingTemplate messaging;
+    private CallMessageService callMessages;
     private AgoraProperties props;
     private CallService service;
 
@@ -87,6 +89,7 @@ class CallServiceTest {
         userRepository = mock(UserRepository.class);
         tokenService = mock(AgoraTokenService.class);
         messaging = mock(SimpMessagingTemplate.class);
+        callMessages = mock(CallMessageService.class);
         props = new AgoraProperties();
         props.setAppId("app-id");
         props.setAppCertificate("cert");
@@ -95,7 +98,8 @@ class CallServiceTest {
 
         service = new CallService(callRepository, participantRepository, conversationRepository,
                 memberRepository, conversationService, userRepository,
-                new AvatarUrlResolver(mock(ObjectStorageService.class)), tokenService, props, messaging, CLOCK);
+                new AvatarUrlResolver(mock(ObjectStorageService.class)), tokenService, props, messaging,
+                callMessages, CLOCK);
 
         wireCallRepository();
         wireParticipantRepository();
@@ -571,7 +575,8 @@ class CallServiceTest {
         Clock later = Clock.fixed(CLOCK.instant().plusSeconds(60), ZoneOffset.UTC);
         CallService lateService = new CallService(callRepository, participantRepository, conversationRepository,
                 memberRepository, conversationService, userRepository,
-                new AvatarUrlResolver(mock(ObjectStorageService.class)), tokenService, props, messaging, later);
+                new AvatarUrlResolver(mock(ObjectStorageService.class)), tokenService, props, messaging,
+                callMessages, later);
 
         int expired = lateService.expireStaleRinging();
 
@@ -579,5 +584,51 @@ class CallServiceTest {
         assertThat(calls.get(started.id()).getStatus()).isEqualTo(Call.Status.MISSED);
         assertThat(stateOf(started.id(), BOB)).isEqualTo(State.MISSED);
         assertThat(eventsTo("user2")).extracting(CallEvent::type).contains("MISSED");
+        verify(callMessages).recordFinishedCall(calls.get(started.id()));
+    }
+
+    // ---------- chat timeline ----------
+
+    @Test
+    void endedCallIsRecordedInTheChat() {
+        CallResponse started = startDirect();
+        service.acceptCall(BOB, started.id());
+
+        service.endCall(ALICE, started.id());
+
+        verify(callMessages).recordFinishedCall(calls.get(started.id()));
+    }
+
+    @Test
+    void rejectedAndCancelledCallsAreRecordedInTheChat() {
+        CallResponse rejected = startDirect();
+        service.rejectCall(BOB, rejected.id());
+        CallResponse cancelled = startDirect();
+        service.cancelCall(ALICE, cancelled.id());
+
+        verify(callMessages).recordFinishedCall(calls.get(rejected.id()));
+        verify(callMessages).recordFinishedCall(calls.get(cancelled.id()));
+    }
+
+    @Test
+    void groupCallIsRecordedOnceWhenItEndsNotWhenSomeoneLeaves() {
+        CallResponse started = startGroup();
+        service.acceptCall(BOB, started.id());
+        service.acceptCall(CAROL, started.id());
+
+        service.endCall(BOB, started.id());
+        verify(callMessages, never()).recordFinishedCall(any());
+
+        service.endCall(CAROL, started.id());
+        verify(callMessages).recordFinishedCall(calls.get(started.id()));
+    }
+
+    @Test
+    void oneDeclineInAGroupIsNotRecordedYet() {
+        CallResponse started = startGroup();
+
+        service.rejectCall(BOB, started.id());
+
+        verify(callMessages, never()).recordFinishedCall(any());
     }
 }

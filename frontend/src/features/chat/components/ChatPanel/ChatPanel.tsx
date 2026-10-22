@@ -317,6 +317,8 @@ export function ChatPanel({
                   typingPlural={typingNames.length > 1}
                   loading={messagesLoading}
                   getUserAvatar={getUserAvatar}
+                  onCallBack={(otherUserId != null || isGroup) ? placeCall : undefined}
+                  callDisabled={!!activeCall}
                 />
                 <MessageInput
                   conversationId={activeConversation.id}

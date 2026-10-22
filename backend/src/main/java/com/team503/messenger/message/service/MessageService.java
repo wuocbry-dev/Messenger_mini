@@ -9,6 +9,7 @@ import com.team503.messenger.file.entity.StoredFile;
 import com.team503.messenger.file.exception.FileException;
 import com.team503.messenger.file.repository.StoredFileRepository;
 import com.team503.messenger.message.dto.MessageAttachmentResponse;
+import com.team503.messenger.message.dto.MessageCallResponse;
 import com.team503.messenger.message.dto.MessagePageResponse;
 import com.team503.messenger.message.dto.MessageReceiptResponse;
 import com.team503.messenger.message.dto.MessageResponse;
@@ -26,6 +27,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -43,6 +45,7 @@ public class MessageService {
     private final ConversationMemberRepository memberRepository;
     private final UserRepository userRepository;
     private final StoredFileRepository storedFileRepository;
+    private final CallSummaryResolver callSummaryResolver;
     private final Clock clock;
 
     public MessageService(
@@ -53,6 +56,7 @@ public class MessageService {
             ConversationMemberRepository memberRepository,
             UserRepository userRepository,
             StoredFileRepository storedFileRepository,
+            CallSummaryResolver callSummaryResolver,
             Clock clock
     ) {
         this.messageRepository = messageRepository;
@@ -62,6 +66,7 @@ public class MessageService {
         this.memberRepository = memberRepository;
         this.userRepository = userRepository;
         this.storedFileRepository = storedFileRepository;
+        this.callSummaryResolver = callSummaryResolver;
         this.clock = clock;
     }
 
@@ -234,6 +239,11 @@ public class MessageService {
                 .toList();
         Map<Long, StoredFile> fileMap = storedFileRepository.findAllById(fileIds).stream()
                 .collect(Collectors.toMap(StoredFile::getId, f -> f));
+        Map<Long, MessageCallResponse> callMap = callSummaryResolver.resolve(messagePage.getContent().stream()
+                .map(Message::getCallId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList());
 
         List<MessageResponse> responses = messagePage.getContent().stream()
                 .map(m -> {
@@ -261,7 +271,8 @@ public class MessageService {
                             m.getContent(),
                             m.getCreatedAt(),
                             List.of(),
-                            attachmentResponses
+                            attachmentResponses,
+                            m.getCallId() == null ? null : callMap.get(m.getCallId())
                     );
                 })
                 .toList();
@@ -344,7 +355,10 @@ public class MessageService {
                 response.content(),
                 response.createdAt(),
                 response.receipts(),
-                attachmentResponses
+                attachmentResponses,
+                message.getCallId() == null
+                        ? null
+                        : callSummaryResolver.resolve(List.of(message.getCallId())).get(message.getCallId())
         );
     }
 }

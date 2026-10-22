@@ -179,3 +179,7 @@ Receipts are persisted to `message_receipts` and realtime-propagated to the conv
 | S → C | `/user/{username}/queue/typing` | Typing indicator from the other member. |
 
 `/user/{username}/queue/...` is the server-side form used by `convertAndSendToUser`. **Clients subscribe without the username**, e.g. `/user/queue/messages`; Spring maps that to the authenticated session's private queue. Subscribing to `/user/<name>/queue/...` does not receive anything.
+
+## Call entries on the messages queue
+
+`/user/queue/messages` also delivers `type: "CALL"` messages when a call finishes. Their `call` field describes the call; see `VOICE_CALL.md`, "Call history in the chat".
