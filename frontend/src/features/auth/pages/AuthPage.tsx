@@ -5,6 +5,7 @@ import type { LoginRequest, RegisterRequest } from '../api/authApi';
 import { Button } from '../../../shared/components/ui/Button';
 import { Input } from '../../../shared/components/ui/Input';
 import { Alert } from '../../../shared/components/ui/Alert';
+import { FeatureShowcase, SHOWCASE_SCENES, type ShowcaseScene } from '../../../shared/components/FeatureShowcase';
 import './AuthPage.css';
 
 type Mode = 'login' | 'register';
@@ -15,6 +16,8 @@ export function AuthPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [caption, setCaption] = useState<string>(SHOWCASE_SCENES[0].caption);
+  const onSceneChange = useCallback((scene: ShowcaseScene) => setCaption(scene.caption), []);
   const [form, setForm] = useState<LoginRequest | RegisterRequest>({
     usernameOrEmail: '',
     password: '',
@@ -80,43 +83,8 @@ export function AuthPage() {
             Connect with friends and colleagues through seamless real-time messaging
           </p>
 
-          <div className="auth-left-features">
-            <div className="auth-left-feature">
-              <div className="auth-left-feature-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                </svg>
-              </div>
-              <span>Instant real-time messaging</span>
-            </div>
-            <div className="auth-left-feature">
-              <div className="auth-left-feature-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.38 2 2 0 0 1 3.6 1.22h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-                </svg>
-              </div>
-              <span>Voice calls with anyone</span>
-            </div>
-            <div className="auth-left-feature">
-              <div className="auth-left-feature-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                  <circle cx="8.5" cy="8.5" r="1.5" />
-                  <polyline points="21 15 16 10 5 21" />
-                </svg>
-              </div>
-              <span>Share photos and files securely</span>
-            </div>
-            <div className="auth-left-feature">
-              <div className="auth-left-feature-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10" />
-                  <polyline points="12 6 12 12 16 14" />
-                </svg>
-              </div>
-              <span>See when friends are online</span>
-            </div>
-          </div>
+          <FeatureShowcase fluid onDark onSceneChange={onSceneChange} className="auth-showcase" />
+          <p className="auth-showcase-caption">{caption}</p>
         </div>
       </div>
 
@@ -137,6 +105,8 @@ export function AuthPage() {
             </svg>
             <span>Messenger Mini</span>
           </div>
+          {/* Narrow screens hide the hero panel, so show a compact showcase here. */}
+          <FeatureShowcase fluid className="auth-compact-showcase" />
           <div className="auth-brand">
             <h1 className="auth-title">
               {mode === 'login' ? 'Welcome back' : 'Create account'}

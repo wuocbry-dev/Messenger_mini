@@ -48,7 +48,11 @@
   position: relative;
   z-index: 1;
   text-align: center;
-  max-width: 400px;
+  width: 100%;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .auth-left-logo {
@@ -202,6 +206,54 @@
   flex: 1;
   height: 1px;
   background: var(--color-border);
+}
+
+/* Animated feature showcase in the hero panel */
+.feature-showcase.auth-showcase {
+  max-width: 540px;
+}
+
+.auth-showcase-caption {
+  max-width: 440px;
+  min-height: 3em;
+  margin: var(--space-4) 0 0;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-normal);
+}
+
+/* Short desktop windows: tighten the hero so everything stays visible. */
+@media (max-height: 820px) {
+  .auth-panel-left {
+    padding: var(--space-8) var(--space-10);
+  }
+
+  .auth-left-logo,
+  .auth-left-tagline {
+    margin-bottom: var(--space-5);
+  }
+
+  .auth-left-tagline {
+    font-size: var(--font-size-lg);
+  }
+
+  .feature-showcase.auth-showcase {
+    max-width: 440px;
+  }
+}
+
+/* The compact showcase replaces the hero when the hero is hidden. The extra
+   class beats FeatureShowcase's own display rule whatever order the CSS loads in. */
+.feature-showcase.auth-compact-showcase {
+  display: none;
+}
+
+@media (max-width: 900px) and (min-height: 700px) {
+  .feature-showcase.auth-compact-showcase {
+    display: flex;
+    max-width: 340px;
+    margin: 0 auto var(--space-6);
+  }
 }
 
 /* Responsive */
