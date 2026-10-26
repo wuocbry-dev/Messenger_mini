@@ -9,16 +9,12 @@ import com.team503.messenger.auth.entity.RefreshToken;
 import com.team503.messenger.auth.exception.AuthException;
 import com.team503.messenger.auth.repository.RefreshTokenRepository;
 import com.team503.messenger.auth.security.JwtService;
+import com.team503.messenger.auth.security.TokenHashing;
 import com.team503.messenger.user.dto.UserResponse;
 import com.team503.messenger.user.entity.User;
 import com.team503.messenger.user.repository.UserRepository;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.LocalDateTime;
-import java.util.Base64;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -32,7 +28,6 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final JwtProperties jwtProperties;
-    private final SecureRandom secureRandom;
     private final Clock clock;
 
     public AuthService(
@@ -48,7 +43,6 @@ public class AuthService {
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.jwtProperties = jwtProperties;
-        this.secureRandom = new SecureRandom();
         this.clock = clock;
     }
 
@@ -150,23 +144,11 @@ public class AuthService {
     }
 
     private String generateRefreshToken() {
-        byte[] bytes = new byte[32];
-        secureRandom.nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        return TokenHashing.generateToken();
     }
 
     private String sha256Hex(String value) {
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256")
-                    .digest(value.getBytes(StandardCharsets.UTF_8));
-            StringBuilder hex = new StringBuilder(digest.length * 2);
-            for (byte b : digest) {
-                hex.append(String.format("%02x", b));
-            }
-            return hex.toString();
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is not available", exception);
-        }
+        return TokenHashing.sha256Hex(value);
     }
 
     private AuthException invalidCredentials() {

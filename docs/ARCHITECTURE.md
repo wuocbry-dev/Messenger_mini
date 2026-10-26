@@ -35,6 +35,19 @@ feature/
 |-- mapper/
 ```
 
+### Email (notification feature)
+
+`notification/` sends transactional email over SMTP (Gmail with an App
+Password by default) via `spring-boot-starter-mail`.
+
+- Credentials come from `MAIL_USERNAME` / `MAIL_PASSWORD` (backend env only).
+  When either is blank, `NoopEmailService` logs instead of sending.
+- `EmailService.send(to, subject, EmailContent)` runs `@Async` so callers are
+  never blocked by SMTP latency; failures are logged, not thrown.
+- All emails share `resources/mail/layout.html` (table layout, inline CSS for
+  Gmail). `EmailTemplateRenderer` HTML-escapes every field and also produces a
+  plain-text alternative part.
+
 ## Dependency Flow
 
 ```text

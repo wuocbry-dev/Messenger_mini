@@ -25,6 +25,20 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+  # Gmail SMTP with an App Password (Google Account > Security > App passwords).
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    default-encoding: UTF-8
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+      mail.smtp.starttls.required: true
+      mail.smtp.connectiontimeout: 10000
+      mail.smtp.timeout: 10000
+      mail.smtp.writetimeout: 10000
 
 springdoc:
   swagger-ui:
@@ -49,6 +63,11 @@ app:
   presence:
     # Seconds a user with no open connection stays online (absorbs page reloads).
     offline-grace-seconds: ${PRESENCE_OFFLINE_GRACE_SECONDS:5}
+  mail:
+    # Sender address; Gmail only accepts the account itself or a verified alias.
+    from: ${MAIL_FROM:${MAIL_USERNAME:}}
+    from-name: ${MAIL_FROM_NAME:Messenger Mini}
+    app-url: ${APP_PUBLIC_URL:http://localhost:5173}
   agora:
     app-id: ${AGORA_APP_ID:}
     app-certificate: ${AGORA_APP_CERTIFICATE:}

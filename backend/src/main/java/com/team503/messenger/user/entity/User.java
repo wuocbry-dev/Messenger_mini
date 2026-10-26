@@ -123,6 +123,11 @@ public class User {
         this.lastSeenAt = lastSeenAt;
     }
 
+    public void changePassword(String passwordHash, LocalDateTime now) {
+        this.passwordHash = passwordHash;
+        this.updatedAt = now;
+    }
+
     public void updateProfile(String displayName, String avatarObjectKey, LocalDateTime now) {
         if (displayName != null && !displayName.isBlank()) {
             this.displayName = displayName;

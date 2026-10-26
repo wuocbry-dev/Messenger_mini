@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="color-scheme" content="light only">
+  <meta name="supported-color-schemes" content="light only">
+  <title>{{subject}}</title>
+  <!--
+    Gmail keeps <style> in <head> but only for class/element selectors and
+    media queries; every visual rule that matters is also inlined below.
+  -->
+  <style>
+    body { margin: 0; padding: 0; width: 100% !important; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    table, td { border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+    img { border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; }
+    a { color: #0866ff; }
+    @media only screen and (max-width: 620px) {
+      .mm-container { width: 100% !important; }
+      .mm-card { padding: 28px 22px !important; }
+      .mm-heading { font-size: 22px !important; line-height: 30px !important; }
+      .mm-outer { padding: 16px 12px !important; }
+    }
+  </style>
+</head>
+<body style="margin:0;padding:0;background-color:#eef1f6;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <!-- Preheader: preview text in the Gmail inbox list, hidden in the body -->
+  <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:#eef1f6;opacity:0;">
+    {{preheader}}&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;
+  </div>
+
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#eef1f6" style="background-color:#eef1f6;">
+    <tr>
+      <td align="center" class="mm-outer" style="padding:32px 16px;">
+
+        <table role="presentation" class="mm-container" width="560" cellspacing="0" cellpadding="0" border="0" style="width:560px;max-width:560px;">
+
+          <!-- Brand bar -->
+          <tr>
+            <td align="left" style="padding:0 4px 18px;">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td width="36" height="36" align="center" valign="middle" bgcolor="#0866ff" style="width:36px;height:36px;border-radius:12px;background-color:#0866ff;color:#ffffff;font-size:18px;font-weight:700;line-height:36px;">
+                    &#9993;
+                  </td>
+                  <td style="padding-left:10px;font-size:17px;font-weight:700;color:#1c1e21;letter-spacing:-0.2px;">
+                    <a href="{{appUrl}}" target="_blank" style="color:#1c1e21;text-decoration:none;">{{appName}}</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Card -->
+          <tr>
+            <td bgcolor="#ffffff" style="background-color:#ffffff;border-radius:18px;border:1px solid #e3e7ee;overflow:hidden;">
+              <!-- Accent strip -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td height="5" bgcolor="#0866ff" style="height:5px;line-height:5px;font-size:0;background-color:#0866ff;background-image:linear-gradient(90deg,#0866ff 0%,#a033ff 55%,#ff5c87 100%);border-radius:18px 18px 0 0;">&nbsp;</td>
+                </tr>
+              </table>
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td class="mm-card" style="padding:36px 40px 32px;">
+                    <h1 class="mm-heading" style="margin:0 0 20px;font-size:24px;line-height:32px;font-weight:700;color:#1c1e21;letter-spacing:-0.3px;">{{heading}}</h1>
+                    {{body}}
+                    {{action}}
+                    {{footnote}}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td align="center" style="padding:22px 12px 0;font-size:12px;line-height:18px;color:#8a8f98;">
+              Email này được gửi tự động từ {{appName}}, vui lòng không trả lời.<br>
+              &copy; {{year}} {{appName}}
+            </td>
+          </tr>
+
+        </table>
+
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

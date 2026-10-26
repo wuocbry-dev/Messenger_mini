@@ -36,6 +36,15 @@ export const authApi = {
     return api.post<AuthResponse>('/api/v1/auth/login', data);
   },
 
+  /** Always resolves (202) whether or not the email is registered. */
+  forgotPassword(email: string): Promise<void> {
+    return api.post<void>('/api/v1/auth/password/forgot', { email });
+  },
+
+  resetPassword(token: string, newPassword: string): Promise<void> {
+    return api.post<void>('/api/v1/auth/password/reset', { token, newPassword });
+  },
+
   logout(): Promise<void> {
     const refreshToken = tokenStorage.getRefresh();
     // Local sign-out must always succeed, even if the server call fails.

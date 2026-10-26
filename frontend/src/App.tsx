@@ -91,6 +91,8 @@ export default function App() {
           path="/auth"
           element={<PublicRoute><AuthPage /></PublicRoute>}
         />
+        {/* Not a PublicRoute: the emailed link must work even while signed in. */}
+        <Route path="/reset-password" element={<AuthPage initialMode="reset" />} />
         <Route element={<ProtectedRoute><ChatLayout /></ProtectedRoute>}>
           <Route path="/" element={<MessengerPage />} />
           <Route path="/users" element={<UsersPage />} />

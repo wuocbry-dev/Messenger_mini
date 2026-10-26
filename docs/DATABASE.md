@@ -25,6 +25,7 @@ The existing root file `messenger_mini_mysql_schema.sql` records the current app
 
 - `V2__group_calls.sql`: `call_participants`, nullable `calls.callee_id` for group calls.
 - `V3__call_messages.sql`: call history in the chat timeline. Adds `messages.call_id` (nullable, unique, `ON DELETE SET NULL` to `calls`), allows message type `CALL`, and backfills one CALL message for every call that had already finished (ENDED, REJECTED, CANCELLED, MISSED). FAILED calls are abandoned sessions and are skipped.
+- `V4__password_reset_tokens.sql`: `password_reset_tokens` for the forgot-password email flow. Stores only the SHA-256 hash of each one-time token, plus `expires_at` (30 minutes) and `used_at`. Requesting a new link or completing a reset marks older unused tokens as used.
 
 ## Rules
 

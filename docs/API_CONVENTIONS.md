@@ -60,6 +60,8 @@ POST /api/v1/auth/register
 POST /api/v1/auth/login
 POST /api/v1/auth/refresh
 POST /api/v1/auth/logout
+POST /api/v1/auth/password/forgot   # always 202, emails a reset link if the account exists
+POST /api/v1/auth/password/reset    # 204; revokes all refresh tokens of the user
 GET  /api/v1/users/me
 GET  /api/v1/users/search?q=<query>
 PATCH /api/v1/users/me/profile

@@ -1,21 +1,44 @@
 import { useState, useCallback, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { authApi } from '../api/authApi';
 import type { LoginRequest, RegisterRequest } from '../api/authApi';
 import { Button } from '../../../shared/components/ui/Button';
 import { Input } from '../../../shared/components/ui/Input';
 import { Alert } from '../../../shared/components/ui/Alert';
+import { PasswordInput } from '../components/PasswordInput';
+import { ForgotPasswordForm } from '../components/ForgotPasswordForm';
+import { ResetPasswordForm } from '../components/ResetPasswordForm';
 import { FeatureShowcase, SHOWCASE_SCENES, type ShowcaseScene } from '../../../shared/components/FeatureShowcase';
 import './AuthPage.css';
 
-type Mode = 'login' | 'register';
+type Mode = 'login' | 'register' | 'forgot' | 'reset';
 
-export function AuthPage() {
+const HEADINGS: Record<Mode, { title: string; subtitle: string }> = {
+  login: { title: 'Welcome back', subtitle: 'Sign in to continue to Messenger Mini' },
+  register: { title: 'Create account', subtitle: 'Get started with your free account' },
+  forgot: { title: 'Forgot password?', subtitle: "Enter your account email and we'll send you a reset link" },
+  reset: { title: 'Set a new password', subtitle: 'Choose a new password for your account' },
+};
+
+/** Router state used when leaving /reset-password, which remounts this page on /auth. */
+interface AuthNavState {
+  mode?: Mode;
+  notice?: string;
+}
+
+interface AuthPageProps {
+  /** '/reset-password' opens straight into the reset form. */
+  initialMode?: Mode;
+}
+
+export function AuthPage({ initialMode = 'login' }: AuthPageProps) {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<Mode>('login');
+  const [searchParams] = useSearchParams();
+  const navState = useLocation().state as AuthNavState | null;
+  const [mode, setMode] = useState<Mode>(navState?.mode ?? initialMode);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(navState?.notice ?? null);
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const [caption, setCaption] = useState<string>(SHOWCASE_SCENES[0].caption);
   const onSceneChange = useCallback((scene: ShowcaseScene) => setCaption(scene.caption), []);
   const [form, setForm] = useState<LoginRequest | RegisterRequest>({
@@ -57,13 +80,30 @@ export function AuthPage() {
     setForm(prev => ({ ...prev, [field]: e.target.value }));
   };
 
-  const toggleMode = () => {
-    setMode(m => m === 'login' ? 'register' : 'login');
+  const switchMode = (next: Mode) => {
+    setMode(next);
     setError(null);
-    setForm(mode === 'login'
+    setNotice(null);
+    setForm(next === 'register'
       ? { username: '', email: '', password: '', displayName: '' }
       : { usernameOrEmail: '', password: '' }
     );
+  };
+
+  const toggleMode = () => switchMode(mode === 'login' ? 'register' : 'login');
+
+  // Leave /reset-password so the token is no longer in the address bar.
+  const leaveResetPage = (next: Mode, message?: string) => {
+    if (initialMode === 'reset') {
+      navigate('/auth', { replace: true, state: { mode: next, notice: message } satisfies AuthNavState });
+      return;
+    }
+    switchMode(next);
+    if (message) setNotice(message);
+  };
+
+  const handleResetDone = () => {
+    leaveResetPage('login', 'Your password has been reset. Sign in with your new password.');
   };
 
   return (
@@ -108,16 +148,25 @@ export function AuthPage() {
           {/* Narrow screens hide the hero panel, so show a compact showcase here. */}
           <FeatureShowcase fluid className="auth-compact-showcase" />
           <div className="auth-brand">
-            <h1 className="auth-title">
-              {mode === 'login' ? 'Welcome back' : 'Create account'}
-            </h1>
-            <p className="auth-subtitle">
-              {mode === 'login' 
-                ? 'Sign in to continue to Messenger Mini' 
-                : 'Get started with your free account'}
-            </p>
+            <h1 className="auth-title">{HEADINGS[mode].title}</h1>
+            <p className="auth-subtitle">{HEADINGS[mode].subtitle}</p>
           </div>
 
+          {mode === 'forgot' && (
+            <ForgotPasswordForm onBackToLogin={() => switchMode('login')} />
+          )}
+
+          {mode === 'reset' && (
+            <ResetPasswordForm
+              token={searchParams.get('token')}
+              onDone={handleResetDone}
+              onRequestNewLink={() => leaveResetPage('forgot')}
+            />
+          )}
+
+          {(mode === 'login' || mode === 'register') && (
+          <>
+          {notice && <Alert type="success" message={notice} onClose={() => setNotice(null)} />}
           {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
 
           <form className="auth-form" onSubmit={handleSubmit}>
@@ -174,38 +223,22 @@ export function AuthPage() {
               />
             )}
 
-            <div className="auth-password">
-              <Input
-                label="Password"
-                type={showPassword ? 'text' : 'password'}
-                placeholder={mode === 'register' ? 'Create a strong password' : 'Enter your password'}
-                value={form.password}
-                onChange={update('password')}
-                required
-                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-              />
-              <button
-                type="button"
-                className="auth-password-toggle"
-                onClick={() => setShowPassword((v) => !v)}
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-                aria-pressed={showPassword}
-              >
-                {showPassword ? (
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
-                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
-                    <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
-                    <line x1="1" y1="1" x2="23" y2="23" />
-                  </svg>
-                ) : (
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                    <circle cx="12" cy="12" r="3" />
-                  </svg>
-                )}
-              </button>
-            </div>
+            <PasswordInput
+              label="Password"
+              placeholder={mode === 'register' ? 'Create a strong password' : 'Enter your password'}
+              value={form.password}
+              onChange={update('password')}
+              required
+              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+            />
+
+            {mode === 'login' && (
+              <div className="auth-forgot-row">
+                <button type="button" className="auth-toggle-btn" onClick={() => switchMode('forgot')}>
+                  Forgot password?
+                </button>
+              </div>
+            )}
 
             <Button 
               type="submit" 
@@ -223,6 +256,8 @@ export function AuthPage() {
               {mode === 'login' ? 'Sign up' : 'Sign in'}
             </button>
           </p>
+          </>
+          )}
         </div>
       </div>
     </div>

@@ -25,9 +25,10 @@ Yêu cầu VPS:
 ## 1. Kiến trúc khi chạy
 
 ```text
+Trình duyệt ──HTTP:80───> nginx trên VPS ──(redirect)──> HTTPS
 Trình duyệt ──HTTPS:443──> nginx trên VPS (certbot)
                                │
-                               ▼  127.0.0.1:8081
+                               ▼  127.0.0.1:8081 (VPS) → :80 (trong container)
                      ┌─ container frontend (nginx) ─┐
                      │  /       → giao diện React    │
                      │  /api/*  → backend:8080       │
@@ -39,6 +40,15 @@ Trình duyệt ──HTTPS:443──> nginx trên VPS (certbot)
 
 Cloudflare R2 (lưu file) và Agora (truyền âm thanh) là dịch vụ bên ngoài.
 ```
+
+Các port:
+
+| Thành phần | Port | Ai truy cập được |
+| --- | --- | --- |
+| nginx VPS | 80 (HTTP), 443 (HTTPS) | Internet. Port 80 chỉ redirect sang HTTPS và cho certbot xác minh domain |
+| Container frontend | 80 trong container, ánh xạ ra `127.0.0.1:8081` | Chỉ chính VPS |
+| Container backend | 8080 | Chỉ trong mạng Docker |
+| Container MySQL | 3306 | Chỉ trong mạng Docker |
 
 Phải có HTTPS thì trình duyệt mới cho dùng micro để gọi thoại.
 

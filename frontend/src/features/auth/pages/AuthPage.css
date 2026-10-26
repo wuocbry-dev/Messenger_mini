@@ -274,12 +274,95 @@
   }
 }
 
-/* Password visibility toggle and compact logo: phone layout only. */
+/* Password visibility toggle (all layouts). */
 .auth-password {
   position: relative;
 }
 
-.auth-password-toggle,
+.auth-password .input-field {
+  padding-right: 48px;
+}
+
+.auth-password-toggle {
+  position: absolute;
+  right: 2px;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: var(--input-height);
+  border: none;
+  border-radius: var(--radius-lg);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.auth-password-toggle:hover,
+.auth-password-toggle[aria-pressed='true'] {
+  color: var(--color-primary);
+}
+
+.auth-password-toggle:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -4px;
+}
+
+.auth-password-group {
+  display: flex;
+  flex-direction: column;
+}
+
+/* "Forgot password?" sits right under the password field. */
+.auth-forgot-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: calc(var(--space-2) * -1);
+  font-size: var(--font-size-sm);
+}
+
+/* Confirmation shown after a reset link is requested. */
+.auth-notice {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-alt);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+}
+
+.auth-notice p {
+  margin: 0;
+}
+
+.auth-notice strong {
+  color: var(--color-text-primary);
+  word-break: break-all;
+}
+
+.auth-notice-icon {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--color-primary-alpha);
+  color: var(--color-primary);
+}
+
+.auth-toggle--tight {
+  margin-top: var(--space-2);
+}
+
+/* Compact logo: phone layout only. */
 .auth-mobile-logo {
   display: none;
 }
@@ -334,25 +417,11 @@
     padding-right: 52px;
   }
 
+  /* 44px touch target inside the 48px phone input. */
   .auth-password-toggle {
-    position: absolute;
-    right: 2px;
     bottom: 2px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     width: 44px;
     height: 44px;
-    border: none;
-    border-radius: var(--radius-lg);
-    background: transparent;
-    color: var(--color-text-muted);
-    cursor: pointer;
-  }
-
-  .auth-password-toggle:hover,
-  .auth-password-toggle[aria-pressed='true'] {
-    color: var(--color-primary);
   }
 
   .auth-submit {

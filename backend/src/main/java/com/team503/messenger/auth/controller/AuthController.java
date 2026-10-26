@@ -1,10 +1,13 @@
 package com.team503.messenger.auth.controller;
 
 import com.team503.messenger.auth.dto.AuthResponse;
+import com.team503.messenger.auth.dto.ForgotPasswordRequest;
 import com.team503.messenger.auth.dto.LoginRequest;
 import com.team503.messenger.auth.dto.RefreshTokenRequest;
 import com.team503.messenger.auth.dto.RegisterRequest;
+import com.team503.messenger.auth.dto.ResetPasswordRequest;
 import com.team503.messenger.auth.service.AuthService;
+import com.team503.messenger.auth.service.PasswordResetService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,9 +21,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final PasswordResetService passwordResetService;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, PasswordResetService passwordResetService) {
         this.authService = authService;
+        this.passwordResetService = passwordResetService;
     }
 
     @PostMapping("/register")
@@ -43,6 +48,19 @@ public class AuthController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void logout(@Valid @RequestBody RefreshTokenRequest request) {
         authService.logout(request);
+    }
+
+    /** Always 202, whether or not the email is registered. */
+    @PostMapping("/password/forgot")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    void forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        passwordResetService.requestReset(request);
+    }
+
+    @PostMapping("/password/reset")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        passwordResetService.resetPassword(request);
     }
 
 }
