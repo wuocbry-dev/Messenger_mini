@@ -1,0 +1,49 @@
+# Production stack: MySQL + Spring Boot backend + nginx serving the React build.
+# Usage (on the VPS, from the repo root):
+#   cp .env.production.example .env.production   # then fill in real values
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_NAME:-messenger_mini}
+      MYSQL_USER: ${DB_USERNAME:-messenger_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
+    # No published port: only the backend container can reach MySQL.
+    volumes:
+      - mysql-data:/var/lib/mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_HOST: mysql
+      DB_PORT: 3306
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      # 80 to serve directly; set HTTP_BIND=127.0.0.1:8081 when a host nginx
+      # with certbot terminates HTTPS in front of this container.
+      - "${HTTP_BIND:-80}:80"
+    depends_on:
+      - backend
+
+volumes:
+  mysql-data:
