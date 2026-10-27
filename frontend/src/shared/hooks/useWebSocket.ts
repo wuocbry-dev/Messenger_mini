@@ -8,7 +8,7 @@
  */
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { Stomp, type Client } from 'stompjs/lib/stomp.js';
-import { ensureFreshToken } from '../auth/refresh';
+import { ensureFreshToken, refreshAccessToken } from '../auth/refresh';
 import { tokenStorage } from '../auth/tokenStorage';
 
 // Default: same origin (ws/wss follows the page protocol) via the Vite dev proxy.
@@ -32,6 +32,9 @@ const CHAT_RECEIPT_EVENT = 'chat:stomp-receipt';
 const CALL_EVENT_NAME = 'messenger:call-event';
 const PRESENCE_EVENT = 'chat:stomp-presence';
 
+const RECONNECT_BASE_MS = 1_500;
+const RECONNECT_MAX_MS = 30_000;
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function dispatch(name: string, detail: any): void {
   if (typeof document === 'undefined') return;
@@ -46,6 +49,12 @@ export function useWebSocket(handlers: WsHandlers) {
   // so an older call that resumes late must not open a second connection
   // (every event would then arrive twice).
   const attemptRef = useRef(0);
+  // Consecutive failed connects, for exponential backoff.
+  const failuresRef = useRef(0);
+  // Set when the server rejected CONNECT with an ERROR frame. The token may look
+  // valid locally (device clock behind the server, JWT_SECRET rotated on
+  // redeploy), so ensureFreshToken() alone would retry with the same token forever.
+  const forceRefreshRef = useRef(false);
   const handlersRef = useRef(handlers);
   handlersRef.current = handlers;
 
@@ -64,7 +73,16 @@ export function useWebSocket(handlers: WsHandlers) {
     }
     // Renew the access token first if it is about to expire, so reconnects after
     // sleep or a long offline period still authenticate.
-    await ensureFreshToken();
+    if (forceRefreshRef.current) {
+      forceRefreshRef.current = false;
+      try {
+        await refreshAccessToken();
+      } catch {
+        /* offline: the next attempt retries */
+      }
+    } else {
+      await ensureFreshToken();
+    }
     if (attempt !== attemptRef.current) return; // superseded or unmounted meanwhile
     const token = tokenStorage.getAccess();
     if (!token) {
@@ -96,6 +114,7 @@ export function useWebSocket(handlers: WsHandlers) {
       client.connect(
         { Authorization: `Bearer ${token}` },
         () => {
+          failuresRef.current = 0;
           setStatus('connected');
           // Spring resolves `/user/queue/...` to the authenticated session's
           // private queue; the server sends with convertAndSendToUser.
@@ -139,19 +158,30 @@ export function useWebSocket(handlers: WsHandlers) {
         // closes, so it is also the reconnect hook.
         (err) => {
           if (clientRef.current !== client) return; // superseded or unmounted
-          console.error('STOMP error', err);
+          if (typeof err === 'string') {
+            console.warn('STOMP connection lost', err);
+          } else {
+            console.error('STOMP error frame', err.headers?.message ?? err.body);
+            forceRefreshRef.current = true;
+          }
           setStatus('error');
-          reconnectTimer.current = setTimeout(() => {
-            void connect();
-          }, 1500);
+          scheduleReconnect();
         }
       );
     } catch (err) {
       console.error('WS connection failed', err);
       setStatus('error');
+      scheduleReconnect();
+    }
+
+    function scheduleReconnect() {
+      if (reconnectTimer.current) return; // ERROR frame and close both land here
+      const delay = Math.min(RECONNECT_BASE_MS * 2 ** failuresRef.current, RECONNECT_MAX_MS);
+      failuresRef.current++;
       reconnectTimer.current = setTimeout(() => {
+        reconnectTimer.current = null;
         void connect();
-      }, 5000);
+      }, delay);
     }
   }, []);
 
